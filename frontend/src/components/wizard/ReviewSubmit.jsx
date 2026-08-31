@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { useSelector } from 'react-redux';
 import { selectWizard } from '../../features/wizard/wizardSlice';
 import { gsap } from 'gsap';
-import { Calendar, User, Briefcase, Phone, Hash, Key, CheckSquare } from 'lucide-react';
+import { Calendar, User, Briefcase, Phone, Hash, Key, CheckSquare, Users, Image as ImageIcon } from 'lucide-react';
 
 export default function ReviewSubmit({ onSubmit, isSubmitting }) {
   const wizardState = useSelector(selectWizard);
@@ -14,11 +14,21 @@ export default function ReviewSubmit({ onSubmit, isSubmitting }) {
     keyCount,
     placementPhoto,
     handoverPhoto,
+    handoverPersons,
     handoverName,
     handoverRole,
     handoverContact,
     metadata
   } = wizardState;
+
+  const keyCountNum = parseInt(keyCount) || 1;
+  // Build display list for multiple persons; fallback to legacy single fields
+  const rawPersons = Array.isArray(handoverPersons) && handoverPersons.length > 0
+    ? handoverPersons
+    : [{ name: handoverName, role: handoverRole, contact: handoverContact, personId: null }];
+  const personsForDisplay = rawPersons.length === keyCountNum
+    ? rawPersons
+    : Array.from({ length: keyCountNum }, (_, i) => rawPersons[i] || { name: '', role: '', contact: '', personId: null });
 
   useEffect(() => {
     // GSAP staggered reveal on review panels
@@ -34,7 +44,7 @@ export default function ReviewSubmit({ onSubmit, isSubmitting }) {
 
   const photos = [
     { label: 'Lock Photo', src: lockPhoto, meta: metadata.lockPhoto },
-    { label: `Key Photo (${keyCount} ${keyCount === 1 ? 'key' : 'keys'})`, src: keyPhoto, meta: metadata.keyPhoto },
+    { label: `Key Photo (${keyCountNum} ${keyCountNum === 1 ? 'key' : 'keys'})`, src: keyPhoto, meta: metadata.keyPhoto },
     { label: 'Placement Photo', src: placementPhoto, meta: metadata.placementPhoto },
     { label: 'Handover Photo', src: handoverPhoto, meta: metadata.handoverPhoto },
   ];
@@ -52,7 +62,7 @@ export default function ReviewSubmit({ onSubmit, isSubmitting }) {
           </p>
           <div className="self-start sm:self-auto inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary-100 dark:bg-primary-950/60 text-primary-800 dark:text-primary-350 font-bold text-xs border border-primary-200 dark:border-primary-900/30">
             <Key className="h-3.5 w-3.5 text-primary-600 dark:text-primary-400" />
-            <span>Total Handovers: {keyCount} {keyCount === 1 ? 'Key' : 'Keys'}</span>
+            <span>Total Handovers: {keyCountNum} {keyCountNum === 1 ? 'Key' : 'Keys'}</span>
           </div>
         </div>
       </div>
@@ -66,13 +76,24 @@ export default function ReviewSubmit({ onSubmit, isSubmitting }) {
           >
             <div className="aspect-square w-full overflow-hidden bg-slate-900 relative">
               {photo.src ? (
-                <img
-                  src={photo.src}
-                  alt={photo.label}
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                />
+                <>
+                  <img
+                    src={photo.src}
+                    alt={photo.label}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    onError={(e) => { e.currentTarget.style.display = 'none'; const fb = e.currentTarget.nextElementSibling; if (fb) fb.style.display = 'flex'; }}
+                  />
+                  <div className="hidden absolute inset-0 flex-col items-center justify-center bg-slate-100 dark:bg-slate-800 text-slate-500 p-4 text-center gap-1" style={{ display: 'none' }}>
+                    <ImageIcon className="h-6 w-6 opacity-40" />
+                    <span className="text-[11px] font-semibold">Image unavailable</span>
+                    <span className="text-[10px] text-slate-400">Please re-upload</span>
+                  </div>
+                </>
               ) : (
-                <div className="flex items-center justify-center h-full text-slate-500">Missing</div>
+                <div className="flex flex-col items-center justify-center h-full text-slate-500 gap-1">
+                  <ImageIcon className="h-6 w-6 opacity-40" />
+                  <span className="text-xs">Missing</span>
+                </div>
               )}
             </div>
             
@@ -86,12 +107,6 @@ export default function ReviewSubmit({ onSubmit, isSubmitting }) {
                   ? new Date(photo.meta.timestamp).toLocaleTimeString()
                   : 'N/A'}
               </p>
-              {photo.meta?.geolocation && (
-                <p className="text-[9px] text-primary-600 dark:text-primary-400 mt-0.5 flex items-center gap-0.5 truncate font-medium">
-                  <MapPin className="h-2.5 w-2.5 shrink-0" />
-                  {photo.meta.geolocation.latitude.toFixed(4)}, {photo.meta.geolocation.longitude.toFixed(4)}
-                </p>
-              )}
             </div>
           </div>
         ))}
@@ -99,36 +114,47 @@ export default function ReviewSubmit({ onSubmit, isSubmitting }) {
 
       {/* Info Details Section */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Handover Details */}
+        {/* Handover Details - Multiple Persons */}
         <div className="reveal-item p-6 rounded-2xl bg-white dark:bg-slate-900/60 border border-slate-250/60 dark:border-slate-800/80 shadow-sm space-y-4">
           <h3 className="text-sm font-bold tracking-wider text-slate-400 dark:text-slate-500 uppercase flex items-center gap-2">
-            <User className="h-4.5 w-4.5 text-primary-600 dark:text-primary-400" />
-            <span>Handover Person</span>
+            {personsForDisplay.length > 1 ? <Users className="h-4 w-4 text-primary-600 dark:text-primary-400" /> : <User className="h-4.5 w-4.5 text-primary-600 dark:text-primary-400" />}
+            <span>{personsForDisplay.length > 1 ? `Handover Persons (${personsForDisplay.length})` : 'Handover Person'}</span>
           </h3>
 
-          <div className="space-y-3.5">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800/60">
-              <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
-                <CheckSquare className="h-3.5 w-3.5" /> Name
-              </span>
-              <span className="text-sm font-bold text-slate-800 dark:text-slate-100">{handoverName}</span>
-            </div>
-            
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800/60">
-              <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
-                <Briefcase className="h-3.5 w-3.5" /> Designation
-              </span>
-              <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">{handoverRole}</span>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
-                <Phone className="h-3.5 w-3.5" /> Contact
-              </span>
-              <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">
-                {handoverContact || <span className="italic text-slate-400">Not Provided</span>}
-              </span>
-            </div>
+          <div className="space-y-4 max-h-[320px] overflow-y-auto pr-1">
+            {personsForDisplay.map((person, idx) => (
+              <div key={idx} className={`space-y-3 ${idx !== personsForDisplay.length - 1 ? 'pb-4 border-b border-slate-100 dark:border-slate-800/60' : ''}`}>
+                <div className="flex items-center gap-2">
+                  <span className="h-6 w-6 rounded-lg bg-primary-100 dark:bg-primary-900/40 text-primary-700 dark:text-primary-300 flex items-center justify-center text-xs font-bold">{idx + 1}</span>
+                  <span className="text-xs font-black tracking-wider uppercase text-slate-600 dark:text-slate-400">Person {idx + 1} {keyCountNum > 1 && <span className="normal-case font-semibold text-slate-400">— Key {idx + 1}</span>}</span>
+                  {person.personId && (
+                    <span className="ml-auto text-[10px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/30 px-2 py-0.5 rounded-full border border-emerald-100 dark:border-emerald-900/30">Reused ✓</span>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                      <CheckSquare className="h-3.5 w-3.5" /> Name
+                    </span>
+                    <span className="text-sm font-bold text-slate-800 dark:text-slate-100 truncate max-w-[60%] text-right">{person.name || <span className="italic text-slate-400">Not provided</span>}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                      <Briefcase className="h-3.5 w-3.5" /> Designation
+                    </span>
+                    <span className="text-sm font-semibold text-slate-800 dark:text-slate-100 truncate max-w-[60%] text-right">{person.role || <span className="italic text-slate-400">Not provided</span>}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                      <Phone className="h-3.5 w-3.5" /> Contact
+                    </span>
+                    <span className="text-sm font-semibold text-slate-800 dark:text-slate-100 truncate max-w-[60%] text-right">
+                      {person.contact || <span className="italic text-slate-400">Not Provided</span>}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
 
@@ -145,7 +171,7 @@ export default function ReviewSubmit({ onSubmit, isSubmitting }) {
                 <Hash className="h-3.5 w-3.5" /> Handed Over
               </span>
               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary-50 dark:bg-primary-950/60 text-primary-600 dark:text-primary-400 font-extrabold text-sm border border-primary-100 dark:border-primary-900/30">
-                {keyCount} {keyCount === 1 ? 'Key' : 'Keys'}
+                {keyCountNum} {keyCountNum === 1 ? 'Key' : 'Keys'}
               </span>
             </div>
 
@@ -159,7 +185,7 @@ export default function ReviewSubmit({ onSubmit, isSubmitting }) {
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Status</span>
               <span className="inline-flex items-center gap-1 text-[10px] uppercase font-bold tracking-wide text-amber-500">
-                <span className="h-1.5 w-1.5 rounded-full bg-amber-505 bg-amber-500 animate-pulse" />
+                <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
                 Awaiting Upload
               </span>
             </div>

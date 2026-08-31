@@ -8,7 +8,6 @@ import {
   Calendar,
   Search,
   Key,
-  MapPin,
   FileSpreadsheet,
   ChevronDown,
   ChevronUp,
@@ -224,14 +223,19 @@ export default function HistoryPage() {
                     <span>Handover (system): <strong>{formatDateTime(rec.handoverAt)}</strong></span>
                     <span className="ml-auto text-[9px] opacity-70">auto on photo upload</span>
                   </div>
-                  {rec.location && <div className="text-[11px] text-slate-500 flex items-center gap-1"><MapPin className="h-3 w-3 text-red-400" />{Number(rec.location.lat).toFixed(4)}, {Number(rec.location.lng).toFixed(4)}</div>}
+
                 </div>
 
                 {!isExpanded && (
                   <div className="px-6 pb-4 grid grid-cols-4 gap-2">
                     {[rec.lockPhoto, rec.keyPhoto, rec.placementPhoto, rec.handoverPhoto].map((p, i) => (
-                      <div key={i} className="aspect-square bg-slate-900 rounded-lg overflow-hidden border border-slate-200/50 dark:border-slate-800">
-                        {p ? <img src={p} alt="thumb" className="w-full h-full object-cover" /> : <div className="h-full w-full flex items-center justify-center text-[10px] text-slate-500 bg-slate-800">No Photo</div>}
+                      <div key={i} className="aspect-square bg-slate-900 rounded-lg overflow-hidden border border-slate-200/50 dark:border-slate-800 relative">
+                        {p ? (
+                          <>
+                            <img src={p} alt="thumb" className="w-full h-full object-cover" onError={(e)=>{ e.currentTarget.style.display='none'; const fb=e.currentTarget.nextElementSibling; if(fb) fb.style.display='flex'; }} />
+                            <div className="hidden absolute inset-0 items-center justify-center text-[10px] text-slate-500 bg-slate-800 p-1 text-center" style={{display:'none'}}>Unavailable</div>
+                          </>
+                        ) : <div className="h-full w-full flex items-center justify-center text-[10px] text-slate-500 bg-slate-800">No Photo</div>}
                       </div>
                     ))}
                   </div>
@@ -242,15 +246,30 @@ export default function HistoryPage() {
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-1.5">
                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Lock Photo</span>
-                        <div className="aspect-video bg-slate-900 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800">{rec.lockPhoto ? <img src={rec.lockPhoto} alt="Lock" className="w-full h-full object-cover" /> : <div className="h-full w-full flex items-center justify-center text-xs text-slate-500 bg-slate-800">Missing</div>}</div>
+                        <div className="aspect-video bg-slate-900 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800 relative">{rec.lockPhoto ? (
+                          <>
+                            <img src={rec.lockPhoto} alt="Lock" className="w-full h-full object-cover" onError={(e)=>{ e.currentTarget.style.display='none'; const fb=e.currentTarget.nextElementSibling; if(fb) fb.style.display='flex'; }} />
+                            <div className="hidden absolute inset-0 items-center justify-center text-xs text-slate-500 bg-slate-800" style={{display:'none'}}>Missing</div>
+                          </>
+                        ) : <div className="h-full w-full flex items-center justify-center text-xs text-slate-500 bg-slate-800">Missing</div>}</div>
                       </div>
                       <div className="space-y-1.5">
                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Key Photo</span>
-                        <div className="aspect-video bg-slate-900 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800">{rec.keyPhoto ? <img src={rec.keyPhoto} alt="Key" className="w-full h-full object-cover" /> : <div className="h-full w-full flex items-center justify-center text-xs text-slate-500 bg-slate-800">Missing</div>}</div>
+                        <div className="aspect-video bg-slate-900 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800 relative">{rec.keyPhoto ? (
+                          <>
+                            <img src={rec.keyPhoto} alt="Key" className="w-full h-full object-cover" onError={(e)=>{ e.currentTarget.style.display='none'; const fb=e.currentTarget.nextElementSibling; if(fb) fb.style.display='flex'; }} />
+                            <div className="hidden absolute inset-0 items-center justify-center text-xs text-slate-500 bg-slate-800" style={{display:'none'}}>Missing</div>
+                          </>
+                        ) : <div className="h-full w-full flex items-center justify-center text-xs text-slate-500 bg-slate-800">Missing</div>}</div>
                       </div>
                       <div className="space-y-1.5">
                         <div className="flex items-center justify-between"><span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Placement Photo</span><span className="text-[9px] text-slate-400">{rec.placementAt ? formatDateTime(rec.placementAt) : ''}</span></div>
-                        <div className="aspect-video bg-slate-900 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800">{rec.placementPhoto ? <img src={rec.placementPhoto} alt="Placement" className="w-full h-full object-cover" /> : <div className="h-full w-full flex items-center justify-center text-xs text-slate-500 bg-slate-800">Missing</div>}</div>
+                        <div className="aspect-video bg-slate-900 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800 relative">{rec.placementPhoto ? (
+                          <>
+                            <img src={rec.placementPhoto} alt="Placement" className="w-full h-full object-cover" onError={(e)=>{ e.currentTarget.style.display='none'; const fb=e.currentTarget.nextElementSibling; if(fb) fb.style.display='flex'; }} />
+                            <div className="hidden absolute inset-0 items-center justify-center text-xs text-slate-500 bg-slate-800" style={{display:'none'}}>Missing</div>
+                          </>
+                        ) : <div className="h-full w-full flex items-center justify-center text-xs text-slate-500 bg-slate-800">Missing</div>}</div>
                         <button onClick={() => triggerPlacementChange(rec.id)} disabled={isUpdating} className="w-full flex items-center justify-center gap-1.5 py-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50 disabled:opacity-50">
                           {isUpdating ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <ImagePlus className="h-3.5 w-3.5" /> } Change Placement Photo
                         </button>
@@ -258,7 +277,12 @@ export default function HistoryPage() {
                       <div className="space-y-1.5">
                         <div className="flex items-center justify-between"><span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Handover Photo</span><span className="text-[9px] font-mono text-emerald-600 dark:text-emerald-400">{rec.handoverAt ? formatDateTime(rec.handoverAt) : ''}</span></div>
                         <div className="aspect-video bg-slate-900 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800 relative">
-                          {rec.handoverPhoto ? <img src={rec.handoverPhoto} alt="Handover" className="w-full h-full object-cover" /> : <div className="h-full w-full flex items-center justify-center text-xs text-slate-500 bg-slate-800">Missing</div>}
+                          {rec.handoverPhoto ? (
+                            <>
+                              <img src={rec.handoverPhoto} alt="Handover" className="w-full h-full object-cover" onError={(e)=>{ e.currentTarget.style.display='none'; const fb=e.currentTarget.nextElementSibling; if(fb) fb.style.display='flex'; }} />
+                              <div className="hidden absolute inset-0 items-center justify-center text-xs text-slate-500 bg-slate-800" style={{display:'none'}}>Missing</div>
+                            </>
+                          ) : <div className="h-full w-full flex items-center justify-center text-xs text-slate-500 bg-slate-800">Missing</div>}
                           <div className="absolute bottom-1.5 left-1.5 bg-emerald-600 text-white text-[9px] px-2 py-0.5 rounded-full font-bold shadow">SYSTEM DATE</div>
                         </div>
                         <button onClick={() => triggerHandoverChange(rec.id)} disabled={isUpdating} className="w-full flex items-center justify-center gap-1.5 py-2 rounded-lg bg-gradient-to-tr from-primary-600 to-amber-500 text-white text-xs font-bold shadow hover:from-primary-700 hover:to-amber-600 disabled:opacity-50">

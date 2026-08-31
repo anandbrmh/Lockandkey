@@ -70,8 +70,13 @@ export default function BrowsePersonModal({ open, onClose, onSelect }) {
                   onClick={() => { onSelect(p); onClose(); }}
                   className="text-left p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-primary-300 dark:hover:border-primary-700 hover:shadow-md transition-all group flex gap-3"
                 >
-                  <div className="h-16 w-16 rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-800 flex-shrink-0">
-                    {p.photo?.url ? <img src={p.photo.url} alt={p.name} className="h-full w-full object-cover group-hover:scale-105 transition-transform" /> : <div className="h-full w-full flex items-center justify-center text-slate-400"><User className="h-6 w-6" /></div>}
+                  <div className="h-16 w-16 rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-800 flex-shrink-0 relative">
+                    {p.photo?.url ? (
+                      <>
+                        <img src={p.photo.url} alt={p.name} className="h-full w-full object-cover group-hover:scale-105 transition-transform" onError={(e)=>{ e.currentTarget.style.display='none'; const fb=e.currentTarget.nextElementSibling; if(fb) fb.style.display='flex'; }} />
+                        <div className="hidden absolute inset-0 items-center justify-center bg-slate-100 dark:bg-slate-800 text-slate-400" style={{display:'none'}}><User className="h-6 w-6" /></div>
+                      </>
+                    ) : <div className="h-full w-full flex items-center justify-center text-slate-400"><User className="h-6 w-6" /></div>}
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-bold text-sm text-slate-800 dark:text-slate-100 truncate flex items-center gap-1">{p.name} {p.usageCount > 1 && <span className="text-[10px] bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 px-1.5 py-0.5 rounded-full">x{p.usageCount}</span>}</p>

@@ -338,8 +338,13 @@ export default function LockKeyUploadWizard() {
                           return (
                             <div key={p._id} onClick={()=> dispatch(selectSavedPerson({person: p, index: idx}))} className={`p-2 rounded-xl border cursor-pointer flex items-center justify-between gap-2 ${sel ? 'bg-primary-50 dark:bg-primary-950/40 border-primary-500' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 hover:border-primary-300'}`}>
                               <div className="flex items-center gap-2 min-w-0">
-                                <div className="h-8 w-8 rounded-lg overflow-hidden bg-white dark:bg-slate-900 flex items-center justify-center shrink-0">
-                                  {p.photo?.url ? <img src={p.photo.url} alt={p.name} className="h-full w-full object-cover" onError={(e)=> e.currentTarget.style.display='none'} /> : <User className="h-4 w-4 text-slate-400"/>}
+                                <div className="h-8 w-8 rounded-lg overflow-hidden bg-white dark:bg-slate-900 flex items-center justify-center shrink-0 relative">
+                                  {p.photo?.url ? (
+                                    <>
+                                      <img src={p.photo.url} alt={p.name} className="h-full w-full object-cover" onError={(e)=>{ e.currentTarget.style.display='none'; const fb=e.currentTarget.nextElementSibling; if(fb) fb.style.display='flex'; }} />
+                                      <div className="hidden absolute inset-0 items-center justify-center bg-white dark:bg-slate-900" style={{display:'none'}}><User className="h-4 w-4 text-slate-400"/></div>
+                                    </>
+                                  ) : <User className="h-4 w-4 text-slate-400"/>}
                                 </div>
                                 <div className="min-w-0">
                                   <p className="text-xs font-bold truncate">{p.name}</p>

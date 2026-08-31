@@ -69,12 +69,17 @@ export default function BrowseLocationModal({ open, onClose, onSelect }) {
                   onClick={() => { onSelect(loc); onClose(); }}
                   className="text-left p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-teal-300 dark:hover:border-teal-700 hover:shadow-md transition-all group flex gap-3"
                 >
-                  <div className="h-16 w-16 rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-800 flex-shrink-0">
-                    {loc.photo?.url ? <img src={loc.photo.url} alt={loc.label || 'location'} className="h-full w-full object-cover group-hover:scale-105 transition-transform" /> : <div className="h-full w-full flex items-center justify-center text-slate-400"><MapPin className="h-6 w-6" /></div>}
+                  <div className="h-16 w-16 rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-800 flex-shrink-0 relative">
+                    {loc.photo?.url ? (
+                      <>
+                        <img src={loc.photo.url} alt={loc.label || 'location'} className="h-full w-full object-cover group-hover:scale-105 transition-transform" onError={(e)=>{ e.currentTarget.style.display='none'; const fb=e.currentTarget.nextElementSibling; if(fb) fb.style.display='flex'; }} />
+                        <div className="hidden absolute inset-0 items-center justify-center bg-slate-100 dark:bg-slate-800 text-slate-400" style={{display:'none'}}><MapPin className="h-6 w-6" /></div>
+                      </>
+                    ) : <div className="h-full w-full flex items-center justify-center text-slate-400"><MapPin className="h-6 w-6" /></div>}
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-bold text-sm text-slate-800 dark:text-slate-100 truncate">{loc.label || 'Unlabeled Location'}</p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 truncate flex items-center gap-1"><MapPin className="h-3 w-3" />{loc.lat != null ? `${loc.lat.toFixed(4)}, ${loc.lng?.toFixed(4)}` : 'No coords'}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 truncate">Saved location</p>
                     <p className="text-[10px] text-slate-400 flex items-center gap-1 mt-1"><Clock className="h-3 w-3" />used {loc.usageCount}× · {new Date(loc.lastUsedAt).toLocaleDateString()}</p>
                   </div>
                   <Check className="h-4 w-4 text-teal-600 opacity-0 group-hover:opacity-100 flex-shrink-0 mt-1" />

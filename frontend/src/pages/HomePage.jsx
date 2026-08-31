@@ -59,7 +59,7 @@ export default function HomePage() {
 
         {/* Hero Description */}
         <p className="anim-hero-desc mt-6 text-base text-slate-500 dark:text-slate-400 max-w-xl leading-relaxed">
-          Log every lock handover instance with automated coordinate markers, high-definition photo verification, key count tallies, and recipient directory details.
+          Log every lock handover instance with high-definition photo verification, key count tallies, and recipient directory details.
         </p>
 
         {/* Primary Buttons */}

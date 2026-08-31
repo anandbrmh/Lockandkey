@@ -3,7 +3,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { setPhoto, removePhoto, selectWizard } from '../../features/wizard/wizardSlice';
 import { useGeolocation } from '../../hooks/useGeolocation';
 import CameraCapture from './CameraCapture';
-import { Camera, Upload, Trash2, RefreshCcw, Image, AlertCircle, MapPin, Timer, Clock, Users, FolderSearch } from 'lucide-react';
+import { Camera, Upload, Trash2, RefreshCcw, Image, AlertCircle, Timer, Clock, Users, FolderSearch } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export default function PhotoUploadStep({
@@ -24,7 +24,7 @@ export default function PhotoUploadStep({
   const [errorMsg, setErrorMsg] = useState('');
   const [imgError, setImgError] = useState(false);
   
-  const { getPosition, loading: geoLoading } = useGeolocation();
+  const { getPosition } = useGeolocation();
 
   // Reset img error when photoData changes
   React.useEffect(() => { setImgError(false); }, [photoData]);
@@ -239,17 +239,11 @@ export default function PhotoUploadStep({
               )}
               {/* Micro Metadata Indicator (Bottom Left) */}
               <div className="absolute bottom-3 left-3 bg-slate-900/70 backdrop-blur-md text-white text-[10px] font-semibold px-2.5 py-1 rounded-md flex items-center gap-1.5 border border-white/5">
-                <span className="h-1.5 w-1.5 bg-emerald-500 rounded-full animate-ping" />
-                {metadata?.geolocation ? (
-                  <span className="flex items-center gap-0.5">
-                    <MapPin className="h-3 w-3 text-red-400" />
-                    {metadata.geolocation.latitude.toFixed(4)}, {metadata.geolocation.longitude.toFixed(4)}
-                  </span>
-                ) : geoLoading ? (
-                  <span>Locking GPS...</span>
-                ) : (
-                  <span>Time: {new Date(metadata?.timestamp || Date.now()).toLocaleTimeString()}</span>
-                )}
+                <span className="h-1.5 w-1.5 bg-emerald-500 rounded-full animate-pulse" />
+                <span className="flex items-center gap-1">
+                  <Clock className="h-3 w-3" />
+                  {metadata?.timestamp ? new Date(metadata.timestamp).toLocaleTimeString() : new Date().toLocaleTimeString()}
+                </span>
               </div>
             </div>
             {/* System-auto date note for handover/placement */}
