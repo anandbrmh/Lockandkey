@@ -1,0 +1,30 @@
+import multer from "multer";
+
+const allowedMimes = ["image/jpeg", "image/png", "image/webp"];
+
+const fileFilter = (req, file, cb) => {
+  if (allowedMimes.includes(file.mimetype)) cb(null, true);
+  else cb(new Error("Only image/jpeg, image/png, image/webp are allowed"), false);
+};
+
+// Memory storage — no local disk writes, buffers go straight to ImageKit
+const storage = multer.memoryStorage();
+
+const upload = multer({
+  storage,
+  fileFilter,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB per image
+});
+
+export const uploadFields = upload.fields([
+  { name: "lockPhoto", maxCount: 1 },
+  { name: "keyPhoto", maxCount: 1 },
+  { name: "placementPhoto", maxCount: 1 },
+  { name: "handoverPhoto", maxCount: 1 },
+]);
+
+// Single-field uploaders for dedicated photo-change endpoints (handover / placement)
+export const uploadHandoverPhoto = upload.single("handoverPhoto");
+export const uploadPlacementPhoto = upload.single("placementPhoto");
+
+export default upload;
