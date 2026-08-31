@@ -1,6 +1,6 @@
 import { createSlice } from '@reduxjs/toolkit';
 
-const createEmptyPerson = () => ({ name: '', role: '', contact: '', personId: null });
+const createEmptyPerson = () => ({ name: '', role: '', contact: '', personId: null, photo: null, status: 'active', photoIsReused: false });
 
 const initialState = {
   currentStep: 0, // 0 = Lock, 1 = Key, 2 = Placement, 3 = Handover, 4 = Review
@@ -8,11 +8,11 @@ const initialState = {
   keyPhoto: null,  // Base64 data URL
   keyCount: 1,
   placementPhoto: null, // Base64 data URL or reused URL
-  handoverPhoto: null,  // Base64 data URL or reused URL
+  handoverPhoto: null,  // Base64 data URL or reused URL (legacy group photo, now optional)
   handoverName: '', // legacy single-person fields (kept for backward compat, synced with handoverPersons[0])
   handoverRole: '',
   handoverContact: '',
-  // New: array of handover persons sized to keyCount
+  // New: array of handover persons sized to keyCount — each with individual photo & status
   handoverPersons: [createEmptyPerson()],
   // Reuse IDs to avoid re-upload to ImageKit
   handoverPersonId: null,
@@ -25,7 +25,9 @@ const initialState = {
     keyPhoto: null,
     placementPhoto: null,
     handoverPhoto: null
-  }
+  },
+  // Editing existing record — null = create mode, otherwise record id being edited
+  editingRecordId: null,
 };
 
 export const wizardSlice = createSlice({
@@ -72,29 +74,67 @@ export const wizardSlice = createSlice({
       state.handoverPersons[idx].name = person.name || '';
       state.handoverPersons[idx].role = person.role || '';
       state.handoverPersons[idx].contact = person.contactNumber || '';
+      if (person.photo?.url) {
+        state.handoverPersons[idx].photo = person.photo.url;
+        state.handoverPersons[idx].photoIsReused = true;
+      }
       if (idx === 0) {
         state.handoverPersonId = person._id;
         state.handoverName = person.name || '';
         state.handoverRole = person.role || '';
         state.handoverContact = person.contactNumber || '';
-      }
-      if (person.photo?.url) {
-        state.handoverPhoto = person.photo.url;
-        state.handoverPhotoIsReused = true;
-        state.metadata.handoverPhoto = { timestamp: person.photo.uploadedAt || new Date().toISOString(), geolocation: null, reused: true };
+        // also keep legacy global handoverPhoto for backward compat, but prefer per-person
+        if (person.photo?.url && !state.handoverPhoto) {
+          state.handoverPhoto = person.photo.url;
+          state.handoverPhotoIsReused = true;
+          state.metadata.handoverPhoto = { timestamp: person.photo.uploadedAt || new Date().toISOString(), geolocation: null, reused: true };
+        }
       }
     },
     clearSavedPerson: (state, action) => {
       const idx = action.payload?.index ?? 0;
       if (state.handoverPersons[idx]) {
         state.handoverPersons[idx].personId = null;
+        // keep photo unless user explicitly removes — don't clear photo automatically
       }
       if (idx === 0) {
         state.handoverPersonId = null;
-        state.handoverPhotoIsReused = false;
-      } else if (state.handoverPersons.every(p => !p.personId)) {
-        state.handoverPhotoIsReused = false;
+        // only clear global reused flag if no per-person photos are reused
+        if (state.handoverPersons.every(p => !p.personId)) {
+          state.handoverPhotoIsReused = false;
+        }
       }
+    },
+    setPersonPhoto: (state, action) => {
+      const { index, photoData, timestamp } = action.payload;
+      if (!state.handoverPersons[index]) state.handoverPersons[index] = createEmptyPerson();
+      state.handoverPersons[index].photo = photoData;
+      state.handoverPersons[index].photoIsReused = photoData?.startsWith('http') || false;
+      // clear personId when new capture overwrites reused
+      if (photoData?.startsWith('data:')) {
+        state.handoverPersons[index].personId = null;
+        if (index === 0) state.handoverPersonId = null;
+      }
+      if (timestamp) {
+        // store in metadata-like field for person
+        if (!state.metadata) state.metadata = {};
+        // optional per-person metadata tracking
+      }
+    },
+    removePersonPhoto: (state, action) => {
+      const { index } = action.payload;
+      if (state.handoverPersons[index]) {
+        state.handoverPersons[index].photo = null;
+        state.handoverPersons[index].photoIsReused = false;
+        // if this was the reused person, clear personId? keep but photo cleared
+      }
+    },
+    setPersonStatus: (state, action) => {
+      const { index, status } = action.payload;
+      const allowed = ["active","inactive","returned","lost"];
+      if (!allowed.includes(status)) return;
+      if (!state.handoverPersons[index]) state.handoverPersons[index] = createEmptyPerson();
+      state.handoverPersons[index].status = status;
     },
     selectSavedLocation: (state, action) => {
       const loc = action.payload; // { _id, photo, lat, lng }
@@ -181,7 +221,16 @@ export const wizardSlice = createSlice({
     setHandoverPersons: (state, action) => {
       const arr = action.payload;
       if (Array.isArray(arr)) {
-        state.handoverPersons = arr.map(p => ({ name: p.name || '', role: p.role || '', contact: p.contact || '', personId: p.personId || null }));
+        const allowed = ["active","inactive","returned","lost"];
+        state.handoverPersons = arr.map(p => ({
+          name: p.name || '',
+          role: p.role || '',
+          contact: p.contact || p.contactNumber || '',
+          personId: p.personId || null,
+          photo: p.photo || null,
+          status: allowed.includes(p.status) ? p.status : 'active',
+          photoIsReused: !!p.photoIsReused || (typeof p.photo === 'string' && p.photo.startsWith('http')),
+        }));
         // Ensure length matches keyCount
         const kc = parseInt(state.keyCount) || 1;
         if (state.handoverPersons.length < kc) {
@@ -212,7 +261,73 @@ export const wizardSlice = createSlice({
     },
     resetWizard: (state) => {
       return initialState;
-    }
+    },
+    hydrateFromRecord: (state, action) => {
+      const rec = action.payload;
+      if (!rec) return;
+      const pickUrl = (v) => (typeof v === 'string' ? v : v?.url || null);
+      state.editingRecordId = rec._id || rec.id || null;
+      state.lockPhoto = pickUrl(rec.lockPhoto) || null;
+      state.keyPhoto = pickUrl(rec.keyPhoto) || null;
+      state.placementPhoto = pickUrl(rec.placementPhoto) || null;
+      state.handoverPhoto = pickUrl(rec.handoverPhoto) || null;
+      state.handoverPhotoIsReused = !!pickUrl(rec.handoverPhoto);
+      state.placementPhotoIsReused = !!pickUrl(rec.placementPhoto);
+      state.keyCount = rec.keyCount ?? 1;
+      state.handoverName = rec.handoverPerson?.name || '';
+      state.handoverRole = rec.handoverPerson?.role || '';
+      state.handoverContact = rec.handoverPerson?.contactNumber || '';
+      state.handoverPersonId = rec.handoverPersons?.[0]?.personId || rec.handoverPerson?.personId || null;
+      state.savedLocationId = null;
+      const allowed = ["active","inactive","returned","lost"];
+      if (Array.isArray(rec.handoverPersons) && rec.handoverPersons.length > 0) {
+        state.handoverPersons = rec.handoverPersons.map(p => ({
+          name: p.name || '',
+          role: p.role || '',
+          contact: p.contactNumber || p.contact || '',
+          personId: p.personId || null,
+          photo: pickUrl(p.photo) || null,
+          status: allowed.includes(p.status) ? p.status : 'active',
+          photoIsReused: !!pickUrl(p.photo),
+        }));
+        // ensure length matches keyCount
+        const kc = parseInt(state.keyCount) || state.handoverPersons.length;
+        if (state.handoverPersons.length < kc) {
+          for (let i = state.handoverPersons.length; i < kc; i++) state.handoverPersons.push(createEmptyPerson());
+        }
+      } else if (rec.handoverPerson?.name) {
+        state.handoverPersons = [{
+          name: rec.handoverPerson.name || '',
+          role: rec.handoverPerson.role || '',
+          contact: rec.handoverPerson.contactNumber || '',
+          personId: null,
+          photo: pickUrl(rec.handoverPhoto) || null,
+          status: 'active',
+          photoIsReused: !!pickUrl(rec.handoverPhoto),
+        }];
+      } else {
+        state.handoverPersons = [createEmptyPerson()];
+      }
+      state.metadata = {
+        lockPhoto: rec.lockPhoto ? { timestamp: rec.lockPhoto.uploadedAt || rec.createdAt, geolocation: null, reused: true } : null,
+        keyPhoto: rec.keyPhoto ? { timestamp: rec.keyPhoto.uploadedAt || rec.createdAt, geolocation: null, reused: true } : null,
+        placementPhoto: rec.placementPhoto ? { timestamp: rec.placementPhoto.uploadedAt || rec.createdAt, geolocation: null, reused: true } : null,
+        handoverPhoto: rec.handoverPhoto ? { timestamp: rec.handoverPhoto.uploadedAt || rec.createdAt, geolocation: null, reused: true } : null,
+      };
+      // Start at earliest incomplete step so user can continue
+      const hasLock = !!state.lockPhoto;
+      const hasKey = !!state.keyPhoto;
+      const hasPlacement = !!state.placementPhoto;
+      const personsComplete = state.handoverPersons.every(p => p.name?.trim() && p.role?.trim() && !!p.photo);
+      if (!hasLock) state.currentStep = 0;
+      else if (!hasKey) state.currentStep = 1;
+      else if (!hasPlacement) state.currentStep = 2;
+      else if (!personsComplete) state.currentStep = 3;
+      else state.currentStep = 4;
+    },
+    setEditingId: (state, action) => {
+      state.editingRecordId = action.payload;
+    },
   }
 });
 
@@ -231,6 +346,11 @@ export const {
   clearSavedPerson,
   selectSavedLocation,
   clearSavedLocation,
+  setPersonPhoto,
+  removePersonPhoto,
+  setPersonStatus,
+  hydrateFromRecord,
+  setEditingId,
 } = wizardSlice.actions;
 
 export const selectWizard = (state) => state.wizard;

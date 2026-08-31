@@ -11,33 +11,43 @@ import {
   clearSavedPerson,
   selectSavedLocation,
   clearSavedLocation,
+  setPersonPhoto,
+  removePersonPhoto,
+  setPersonStatus,
 } from '../../features/wizard/wizardSlice';
 import { fetchSavedPersons, fetchSavedLocations, selectDirectory } from '../../features/directory/directorySlice';
-import { createRecord, selectRecordsState } from '../../features/records/recordsSlice';
+import { createRecord, updateRecord, selectRecordsState } from '../../features/records/recordsSlice';
 import { resetWizard } from '../../features/wizard/wizardSlice';
 import { buildRecordFormData } from '../../utils/formDataBuilder';
-import { validateStep } from '../../utils/validators';
+import { validateStep, canSaveDraft } from '../../utils/validators';
+import { useNavigate } from 'react-router-dom';
 import StepIndicator from './StepIndicator';
 import PhotoUploadStep from './PhotoUploadStep';
 import ReviewSubmit from './ReviewSubmit';
 import SuccessAnimation from './SuccessAnimation';
-import { ArrowLeft, ArrowRight, User, Contact, Hash, Landmark, Sparkles, Plus, Minus, AlertCircle, Users, MapPin, Check, Search, X, Briefcase, Phone, Clock } from 'lucide-react';
+import CameraCapture from './CameraCapture';
+import { ArrowLeft, ArrowRight, User, Contact, Hash, Landmark, Sparkles, Plus, Minus, AlertCircle, Users, MapPin, Check, Search, X, Briefcase, Phone, Clock, Camera, Upload, Trash2, Image as ImageIcon, ShieldCheck, Save } from 'lucide-react';
 import BrowsePersonModal from './BrowsePersonModal';
 import BrowseLocationModal from './BrowseLocationModal';
 import { motion, AnimatePresence } from 'framer-motion';
 
-export default function LockKeyUploadWizard() {
+export default function LockKeyUploadWizard({ editingId }) {
   const dispatch = useDispatch();
+  const navigate = useNavigate();
   const wizardState = useSelector(selectWizard);
   const currentStep = useSelector(selectCurrentStep);
-  const { creating: isLoading, error: createError } = useSelector(selectRecordsState);
+  const { creating: isLoading, loading: updatingLoading, error: createError } = useSelector(selectRecordsState);
   const { persons = [], locations = [], loadingPersons, loadingLocations } = useSelector(selectDirectory);
+  const isEditing = !!editingId || !!wizardState.editingRecordId;
+  const effectiveId = editingId || wizardState.editingRecordId;
 
   const [isSuccess, setIsSuccess] = useState(false);
   const [direction, setDirection] = useState(1); // 1 = Forward, -1 = Backward
   const [showPersonBrowse, setShowPersonBrowse] = useState(false);
   const [showLocationBrowse, setShowLocationBrowse] = useState(false);
   const [activePersonIdx, setActivePersonIdx] = useState(0);
+  const [cameraPersonIdx, setCameraPersonIdx] = useState(null);
+  const personFileRefs = React.useRef({});
 
   useEffect(() => {
     dispatch(fetchSavedPersons({ limit: 50 }));
@@ -56,10 +66,42 @@ export default function LockKeyUploadWizard() {
     dispatch(prevStep());
   };
 
-  const handleSubmit = async () => {
+  const handleSaveDraft = async () => {
+    if (!canSaveDraft(wizardState)) {
+      alert('Please capture Lock Photo (Step 1) before saving. You can complete other steps later.');
+      return;
+    }
     try {
       const formData = buildRecordFormData(wizardState);
-      const result = await dispatch(createRecord(formData));
+      let result;
+      if (isEditing && effectiveId) {
+        result = await dispatch(updateRecord({ id: effectiveId, formData }));
+      } else {
+        result = await dispatch(createRecord(formData));
+      }
+      if (result.meta.requestStatus === 'fulfilled') {
+        setIsSuccess(true);
+      } else {
+        alert(result.payload || 'Save failed');
+      }
+    } catch (e) {
+      console.error('Failed to save draft:', e);
+    }
+  };
+
+  const handleSubmit = async () => {
+    if (!canSaveDraft(wizardState)) {
+      alert('Lock Photo is required to save.');
+      return;
+    }
+    try {
+      const formData = buildRecordFormData(wizardState);
+      let result;
+      if (isEditing && effectiveId) {
+        result = await dispatch(updateRecord({ id: effectiveId, formData }));
+      } else {
+        result = await dispatch(createRecord(formData));
+      }
       if (result.meta.requestStatus === 'fulfilled') {
         setIsSuccess(true);
       }
@@ -68,9 +110,20 @@ export default function LockKeyUploadWizard() {
     }
   };
 
+  const handlePersonFile = (idx, file) => {
+    if (!file) return;
+    if (!file.type.startsWith('image/')) { alert('Only images allowed'); return; }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      if (e.target?.result) dispatch(setPersonPhoto({ index: idx, photoData: e.target.result, timestamp: new Date().toISOString() }));
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleResetFromSuccess = () => {
     dispatch(resetWizard());
     setIsSuccess(false);
+    if (isEditing) navigate('/history');
   };
 
   // Step Slide Framer Motion Animation Settings
@@ -248,29 +301,39 @@ export default function LockKeyUploadWizard() {
       case 3: {
         const keyCountNum = parseInt(wizardState.keyCount) || 1;
         const handoverPersons = wizardState.handoverPersons || [];
-        // ensure persons length matches keyCount (safety)
-        const personsForUI = handoverPersons.length === keyCountNum ? handoverPersons : Array.from({length: keyCountNum}, (_,i)=> handoverPersons[i] || {name:'', role:'', contact:'', personId:null});
+        const personsForUI = handoverPersons.length === keyCountNum ? handoverPersons : Array.from({length: keyCountNum}, (_,i)=> handoverPersons[i] || {name:'', role:'', contact:'', personId:null, photo:null, status:'active', photoIsReused:false});
         const getFilteredForIdx = (idx) => {
           const name = personsForUI[idx]?.name || '';
           if (!name) return persons;
           const search = name.toLowerCase();
           return persons.filter(p => p.name?.toLowerCase().includes(search) || p.role?.toLowerCase().includes(search) || p.contactNumber?.includes(search));
         };
-        const handoverFields = (
-          <div className="space-y-5 max-w-2xl">
+        return (
+          <div key="handover" className="space-y-5">
+            <div className="text-center md:text-left">
+              <h2 className="text-xl font-bold tracking-tight text-slate-800 dark:text-slate-100 sm:text-2xl">Handover Verification — {keyCountNum} {keyCountNum===1?'Person':'Persons'}</h2>
+              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Each key’s receiver must have their <strong>own photo</strong> and status. You can save after Step 1 (Lock) and complete others later.</p>
+              <div className="mt-2 flex items-center gap-2 text-xs font-bold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/30 px-3 py-2 rounded-xl border border-amber-100 dark:border-amber-900/30">
+                <AlertCircle className="h-4 w-4" /> Per-key status enum: <span className="font-mono">active / inactive / returned / lost</span> — change anytime from history.
+              </div>
+            </div>
             <div className="flex items-center gap-2 text-xs font-bold text-primary-700 dark:text-primary-300 bg-primary-50 dark:bg-primary-950/30 px-3 py-2 rounded-xl border border-primary-100 dark:border-primary-900/30">
               <Users className="h-4 w-4" />
               <span>Keys: {keyCountNum} — Fill details for {keyCountNum} {keyCountNum===1?'person':'persons'} below (each key's receiver)</span>
+              <button type="button" onClick={()=> { setActivePersonIdx(0); setShowPersonBrowse(true); }} className="ml-auto text-xs text-primary-600 dark:text-primary-400 font-semibold hover:underline flex items-center gap-1"><Users className="h-3 w-3"/> Browse</button>
             </div>
             {personsForUI.map((person, idx) => {
               const filteredForIdx = getFilteredForIdx(idx);
               const isSelected = !!person.personId;
+              const personPhoto = person.photo;
+              const statusVal = person.status || 'active';
               return (
-                <div key={idx} className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 shadow-sm space-y-3">
+                <div key={idx} className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 shadow-sm space-y-4">
                   <div className="flex items-center justify-between">
                     <h4 className="text-xs font-black tracking-wider uppercase text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
                       <span className="h-6 w-6 rounded-lg bg-primary-100 dark:bg-primary-900/40 text-primary-700 dark:text-primary-300 flex items-center justify-center text-xs font-bold">{idx+1}</span>
                       Person {idx+1} {keyCountNum>1 && <span className="normal-case font-semibold text-slate-400">— Key {idx+1}</span>}
+                      <span className={`ml-2 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase border ${statusVal==='active'?'bg-emerald-50 text-emerald-700 border-emerald-200': statusVal==='inactive'?'bg-slate-100 text-slate-600 border-slate-200': statusVal==='returned'?'bg-blue-50 text-blue-700 border-blue-200':'bg-red-50 text-red-700 border-red-200'}`}>{statusVal}</span>
                     </h4>
                     {isSelected ? (
                       <button type="button" onClick={()=> dispatch(clearSavedPerson({index: idx}))} className="text-xs text-red-600 hover:text-red-700 font-bold px-2 py-1 bg-red-50 dark:bg-red-950/40 rounded-lg border border-red-200 dark:border-red-900/40">Clear</button>
@@ -283,55 +346,75 @@ export default function LockKeyUploadWizard() {
                       <Users className="h-3.5 w-3.5" /> Reusing: <strong>{person.name}</strong> ({person.role||'No role'})
                     </div>
                   )}
+                  {/* Per-person Photo Uploader */}
+                  <div className="space-y-2">
+                    <label className="flex items-center gap-1.5 text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide">
+                      <Camera className="h-3.5 w-3.5 text-primary-600" />
+                      <span>Person {idx+1} Photo * — individual verification image</span>
+                      {person.photoIsReused && <span className="ml-auto text-[10px] bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full border border-emerald-200">Reused ✓ no upload</span>}
+                    </label>
+                    {!personPhoto ? (
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        <button type="button" onClick={() => setCameraPersonIdx(idx)} className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-tr from-primary-600 to-amber-500 text-white font-bold py-2.5 px-3 rounded-xl text-sm shadow"><Camera className="h-4 w-4"/> Open Camera</button>
+                        <button type="button" onClick={() => personFileRefs.current[idx]?.click()} className="flex-1 flex items-center justify-center gap-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-semibold py-2.5 px-3 rounded-xl text-sm"><Upload className="h-4 w-4"/> Browse File</button>
+                        <input ref={el => personFileRefs.current[idx]=el} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={(e)=>{ const f=e.target.files?.[0]; if(f) handlePersonFile(idx,f); e.target.value=''; }} />
+                      </div>
+                    ) : (
+                      <div className="relative overflow-hidden rounded-xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 group w-full max-w-sm mx-auto">
+                        <img src={personPhoto} alt={`Person ${idx+1}`} className="w-full aspect-video object-cover" onError={(e)=>{ e.currentTarget.style.display='none'; }} />
+                        <div className="absolute inset-0 bg-slate-950/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                          <button type="button" onClick={()=> setCameraPersonIdx(idx)} className="p-2 bg-white/20 hover:bg-white/30 text-white backdrop-blur rounded-lg"><Camera className="h-4 w-4"/></button>
+                          <button type="button" onClick={()=> dispatch(removePersonPhoto({index: idx}))} className="p-2 bg-red-600/90 hover:bg-red-700 text-white rounded-lg"><Trash2 className="h-4 w-4"/></button>
+                        </div>
+                        {person.photoIsReused && <div className="absolute top-2 left-2 bg-emerald-600 text-white text-[10px] px-2 py-0.5 rounded-full font-bold">Reused</div>}
+                        <div className="absolute bottom-2 right-2 flex gap-1">
+                          <button type="button" onClick={()=> dispatch(removePersonPhoto({index: idx}))} className="text-[11px] bg-white dark:bg-slate-800 px-2 py-1 rounded-lg border font-semibold">Remove</button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div className="space-y-1.5">
                       <label className="flex items-center gap-1.5 text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide">
                         <User className="h-3.5 w-3.5 text-primary-600 dark:text-primary-400" />
                         <span>Full Name *</span>
                       </label>
-                      <input
-                        type="text"
-                        placeholder={`Person ${idx+1} name`}
-                        value={person.name}
-                        onChange={(e) => dispatch(setHandoverDetails({ name: e.target.value, index: idx }))}
-                        className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 font-medium focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm"
-                        required
-                      />
+                      <input type="text" placeholder={`Person ${idx+1} name`} value={person.name} onChange={(e) => dispatch(setHandoverDetails({ name: e.target.value, index: idx }))} className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 font-medium focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm" />
                     </div>
                     <div className="space-y-1.5">
                       <label className="flex items-center gap-1.5 text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide">
                         <Landmark className="h-3.5 w-3.5 text-primary-600 dark:text-primary-400" />
                         <span>Designation *</span>
                       </label>
-                      <input
-                        type="text"
-                        placeholder="e.g. Security Supervisor"
-                        value={person.role}
-                        onChange={(e) => dispatch(setHandoverDetails({ role: e.target.value, index: idx }))}
-                        className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 font-medium focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm"
-                        required
-                      />
+                      <input type="text" placeholder="e.g. Security Supervisor" value={person.role} onChange={(e) => dispatch(setHandoverDetails({ role: e.target.value, index: idx }))} className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 font-medium focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm" />
                     </div>
                   </div>
-                  <div className="space-y-1.5">
-                    <label className="flex items-center gap-1.5 text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide">
-                      <Contact className="h-3.5 w-3.5 text-primary-600 dark:text-primary-400" />
-                      <span>Contact (Optional)</span>
-                    </label>
-                    <input
-                      type="tel"
-                      placeholder="e.g. +1 555-0199"
-                      value={person.contact}
-                      onChange={(e) => dispatch(setHandoverDetails({ contact: e.target.value, index: idx }))}
-                      className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 font-medium focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm"
-                    />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <label className="flex items-center gap-1.5 text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide">
+                        <Contact className="h-3.5 w-3.5 text-primary-600 dark:text-primary-400" />
+                        <span>Contact (Optional)</span>
+                      </label>
+                      <input type="tel" placeholder="e.g. +1 555-0199" value={person.contact} onChange={(e) => dispatch(setHandoverDetails({ contact: e.target.value, index: idx }))} className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 font-medium focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="flex items-center gap-1.5 text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide">
+                        <ShieldCheck className="h-3.5 w-3.5 text-primary-600 dark:text-primary-400" />
+                        <span>Key Status *</span>
+                      </label>
+                      <select value={statusVal} onChange={(e)=> dispatch(setPersonStatus({index: idx, status: e.target.value}))} className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 font-medium focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm">
+                        <option value="active">Active</option>
+                        <option value="inactive">Inactive</option>
+                        <option value="returned">Returned</option>
+                        <option value="lost">Lost</option>
+                      </select>
+                    </div>
                   </div>
-                  {/* Inline quick select for this row */}
+                  {/* Inline quick select */}
                   {persons && persons.length > 0 && (
                     <div className="space-y-1.5 pt-1 border-t border-slate-100 dark:border-slate-800/60">
-                      <p className="text-xs font-bold text-slate-600 dark:text-slate-400 flex items-center gap-1">
-                        <Users className="h-3 w-3 text-primary-500" /> Select Existing ({filteredForIdx.length})
-                      </p>
+                      <p className="text-xs font-bold text-slate-600 dark:text-slate-400 flex items-center gap-1"><Users className="h-3 w-3 text-primary-500" /> Select Existing ({filteredForIdx.length})</p>
                       <div className="max-h-32 overflow-y-auto space-y-1 pr-1">
                         {filteredForIdx.slice(0,6).map((p)=>{
                           const sel = person.personId === p._id;
@@ -361,22 +444,13 @@ export default function LockKeyUploadWizard() {
                 </div>
               );
             })}
+            {/* Per-person camera overlay */}
+            {cameraPersonIdx !== null && (
+              <div className="fixed inset-0 z-50">
+                <CameraCapture label={`Person ${cameraPersonIdx+1} Photo`} onCapture={(base64)=>{ dispatch(setPersonPhoto({ index: cameraPersonIdx, photoData: base64, timestamp: new Date().toISOString() })); setCameraPersonIdx(null); }} onClose={()=> setCameraPersonIdx(null)} />
+              </div>
+            )}
           </div>
-        );
-
-        return (
-          <PhotoUploadStep
-            key="handover"
-            title={`Handover Verification — ${keyCountNum} ${keyCountNum===1?'Person':'Persons'}`}
-            description={keyCountNum===1 ? "Capture or upload a verification portrait of the receiver, and fill their details below." : `Capture one group/verification photo, then fill details for all ${keyCountNum} receivers below.`}
-            photoKey="handoverPhoto"
-            extraFields={handoverFields}
-            browseAction={{
-              label: handoverPersons.some(p=>p.personId) ? `Reusing ${handoverPersons.filter(p=>p.personId).length} saved ✓` : 'Browse Existing Person',
-              icon: <Users className="h-4.5 w-4.5" />,
-              onClick: () => { setActivePersonIdx(0); setShowPersonBrowse(true); },
-            }}
-          />
         );
         }
 
@@ -385,7 +459,8 @@ export default function LockKeyUploadWizard() {
           <ReviewSubmit
             key="review"
             onSubmit={handleSubmit}
-            isSubmitting={isLoading}
+            isSubmitting={isLoading || updatingLoading}
+            isEditing={isEditing}
           />
         );
 
@@ -404,12 +479,13 @@ export default function LockKeyUploadWizard() {
       {/* Upper Wizard Banner */}
       <div className="glass-panel p-6 rounded-3xl shadow-sm border border-slate-200/50 dark:border-slate-800/80 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary-50 dark:bg-primary-950/60 text-primary-600 dark:text-primary-400 font-bold text-xs border border-primary-100 dark:border-primary-900/30 mb-2">
-            <Sparkles className="h-3 w-3 animate-spin" style={{ animationDuration: '3s' }} /> Handover Logger
+          <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full font-bold text-xs border mb-2 ${isEditing ? 'bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800' : 'bg-primary-50 dark:bg-primary-950/60 text-primary-600 dark:text-primary-400 border-primary-100 dark:border-primary-900/30'}`}>
+            <Sparkles className="h-3 w-3 animate-spin" style={{ animationDuration: '3s' }} /> {isEditing ? 'Editing Existing Record' : 'Handover Logger'}
           </span>
           <h1 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">
-            Document Handover Event
+            {isEditing ? 'Continue Handover — Update Remaining Steps' : 'Document Handover Event'}
           </h1>
+          {isEditing && <p className="text-xs text-slate-500 mt-1">You saved lock earlier. Fill Key / Placement / Per-person photos now and hit Update. Draft already visible in History.</p>}
         </div>
         
         {/* Step Indicator Sub-component */}
@@ -446,33 +522,53 @@ export default function LockKeyUploadWizard() {
         <BrowseLocationModal open={showLocationBrowse} onClose={() => setShowLocationBrowse(false)} onSelect={handleSelectLocation} />
 
         {/* Wizard Footer Controls */}
-        {currentStep < 4 && (
-          <div className="mt-8 pt-6 border-t border-slate-100 dark:border-slate-800/60 flex items-center justify-between">
-            <button
-              onClick={handlePrev}
-              disabled={currentStep === 0}
-              className={`flex items-center gap-1.5 font-bold text-sm px-5 py-3 rounded-xl transition-all ${
-                currentStep === 0
-                  ? 'text-slate-350 dark:text-slate-650 cursor-not-allowed'
-                  : 'text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800 active:scale-95'
-              }`}
-            >
-              <ArrowLeft className="h-4 w-4" />
-              <span>Back</span>
-            </button>
+        {(currentStep < 4 || true) && (
+          <div className="mt-8 pt-6 border-t border-slate-100 dark:border-slate-800/60 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handlePrev}
+                disabled={currentStep === 0}
+                className={`flex items-center gap-1.5 font-bold text-sm px-5 py-3 rounded-xl transition-all ${
+                  currentStep === 0
+                    ? 'text-slate-350 dark:text-slate-650 cursor-not-allowed'
+                    : 'text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800 active:scale-95'
+                }`}
+              >
+                <ArrowLeft className="h-4 w-4" />
+                <span>Back</span>
+              </button>
+              {/* Save Draft / Update — allowed from any step if at least lock exists */}
+              <button
+                onClick={handleSaveDraft}
+                disabled={!canSaveDraft(wizardState) || isLoading || updatingLoading}
+                title={!canSaveDraft(wizardState) ? 'Add Lock Photo first (Step 1) to save' : isEditing ? 'Update record with current steps' : 'Save now and complete remaining steps later from History'}
+                className={`flex items-center gap-1.5 font-bold text-sm px-5 py-3 rounded-xl border transition-all active:scale-95 ${
+                  canSaveDraft(wizardState)
+                    ? 'bg-white dark:bg-slate-900 border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 shadow-sm'
+                    : 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-400 cursor-not-allowed'
+                }`}
+              >
+                {(isLoading || updatingLoading) ? <span className="h-4 w-4 border-2 border-t-transparent border-emerald-600 rounded-full animate-spin" /> : <Save className="h-4 w-4" />}
+                <span>{isEditing ? 'Update Record — Save Progress' : `Save ${currentStep===0 ? 'Lock' : 'Draft'} — Complete Later`}</span>
+              </button>
+            </div>
 
-            <button
-              onClick={handleNext}
-              disabled={!isCurrentStepValid}
-              className={`flex items-center gap-1.5 font-bold text-sm px-6 py-3 rounded-xl shadow-md transition-all active:scale-95 ${
-                isCurrentStepValid
-                  ? 'bg-gradient-to-tr from-primary-600 to-amber-500 hover:from-primary-700 hover:to-amber-650 text-white shadow-primary-500/10'
-                  : 'bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-500 cursor-not-allowed shadow-none'
-              }`}
-            >
-              <span>Next</span>
-              <ArrowRight className="h-4 w-4" />
-            </button>
+            {currentStep < 4 ? (
+              <button
+                onClick={handleNext}
+                disabled={!isCurrentStepValid}
+                className={`flex items-center gap-1.5 font-bold text-sm px-6 py-3 rounded-xl shadow-md transition-all active:scale-95 ${
+                  isCurrentStepValid
+                    ? 'bg-gradient-to-tr from-primary-600 to-amber-500 hover:from-primary-700 hover:to-amber-650 text-white shadow-primary-500/10'
+                    : 'bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-500 cursor-not-allowed shadow-none'
+                }`}
+              >
+                <span>Next</span>
+                <ArrowRight className="h-4 w-4" />
+              </button>
+            ) : (
+              <div className="text-xs text-slate-400">Review → Submit to Vault</div>
+            )}
           </div>
         )}
       </div>

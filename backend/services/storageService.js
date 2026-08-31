@@ -41,25 +41,31 @@ export const deleteFromImageKit = async (fileId) => {
 
 /**
  * Safely delete a fileId only if no other non-deleted record/person/location still references it
+ * Prevents breaking reused photos (shared fileId)
  */
 export const safeDeleteFromImageKit = async (fileId, excludeRecordId = null) => {
   if (!fileId) return;
   try {
+    // Lazy imports to avoid circular deps - models are mongoose
     const { default: LockKeyRecord } = await import("../models/LockKeyRecord.js");
     const { default: SavedPerson } = await import("../models/SavedPerson.js");
     const { default: SavedLocation } = await import("../models/SavedLocation.js");
+
     const fileIdQuery = { $or: [
       { "lockPhoto.fileId": fileId },
       { "keyPhoto.fileId": fileId },
       { "placementPhoto.fileId": fileId },
       { "handoverPhoto.fileId": fileId },
+      { "handoverPersons.photo.fileId": fileId },
     ]};
     if (excludeRecordId) fileIdQuery._id = { $ne: excludeRecordId };
+
     const [recordRef, personRef, locationRef] = await Promise.all([
       LockKeyRecord.countDocuments({ ...fileIdQuery, isDeleted: false }),
       SavedPerson.countDocuments({ "photo.fileId": fileId }),
       SavedLocation.countDocuments({ "photo.fileId": fileId }),
     ]);
+
     if (recordRef > 0 || personRef > 0 || locationRef > 0) {
       console.log(`[ImageKit] safeDelete skipped for ${fileId}: still referenced (records:${recordRef} persons:${personRef} locs:${locationRef})`);
       return;
@@ -67,12 +73,14 @@ export const safeDeleteFromImageKit = async (fileId, excludeRecordId = null) => 
     await deleteFromImageKit(fileId);
   } catch (err) {
     console.error(`[ImageKit] safeDelete failed for ${fileId}: ${err.message}`);
+    // fallback to direct delete attempt
     await deleteFromImageKit(fileId);
   }
 };
 
 /**
- * Delete all 4 images for a record - uses safeDelete to avoid breaking reused/shared photos
+ * Delete all images for a record - includes per-person photos
+ * Uses safeDelete to avoid breaking reused/shared photos
  * @param {Object} record - LockKeyRecord document
  */
 export const deleteFilesForRecord = async (record) => {
@@ -81,6 +89,7 @@ export const deleteFilesForRecord = async (record) => {
     record.keyPhoto?.fileId,
     record.placementPhoto?.fileId,
     record.handoverPhoto?.fileId,
+    ...(Array.isArray(record.handoverPersons) ? record.handoverPersons.map(p=>p.photo?.fileId).filter(Boolean) : []),
   ].filter(Boolean);
   await Promise.all(fileIds.map((id) => safeDeleteFromImageKit(id, record._id)));
 };

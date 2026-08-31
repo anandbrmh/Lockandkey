@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
+import { useNavigate } from 'react-router-dom';
 import { fetchRecords, deleteRecord, updateRecord, updateHandoverPhoto, updatePlacementPhoto, selectRecordsState } from '../features/records/recordsSlice';
 import { selectCurrentUser } from '../features/auth/authSlice';
 import LoadingSpinner from '../components/common/LoadingSpinner';
@@ -23,6 +24,7 @@ import {
   Save,
   X,
   User,
+  Users,
   Phone,
   Hash,
 } from 'lucide-react';
@@ -32,14 +34,14 @@ const formatDateTime = (iso) => {
   try { const d = new Date(iso); return `${d.toLocaleDateString()} ${d.toLocaleTimeString()}`; } catch { return String(iso); }
 };
 
-// Normalize backend record to UI shape
+// Normalize backend record to UI shape — includes per-person photos & status enum
 const normalizeRecord = (rec) => {
   const id = rec._id || rec.id;
   const createdAt = rec.createdAt;
   const keyCount = rec.keyCount ?? 1;
-  const handoverName = rec.handoverPerson?.name || rec.handoverName || 'Unknown';
-  const handoverRole = rec.handoverPerson?.role || rec.handoverRole || '';
-  const handoverContact = rec.handoverPerson?.contactNumber || rec.handoverContact || '';
+  const handoverName = rec.handoverPerson?.name || rec.handoverName || (Array.isArray(rec.handoverPersons) && rec.handoverPersons[0]?.name) || 'Unknown';
+  const handoverRole = rec.handoverPerson?.role || rec.handoverRole || (Array.isArray(rec.handoverPersons) && rec.handoverPersons[0]?.role) || '';
+  const handoverContact = rec.handoverPerson?.contactNumber || rec.handoverContact || (Array.isArray(rec.handoverPersons) && rec.handoverPersons[0]?.contactNumber) || '';
   const pickUrl = (v) => (typeof v === 'string' ? v : v?.url || null);
   const pickUploadedAt = (v) => (typeof v === 'object' ? v?.uploadedAt || null : null);
   const lockPhoto = pickUrl(rec.lockPhoto);
@@ -47,17 +49,26 @@ const normalizeRecord = (rec) => {
   const placementPhoto = pickUrl(rec.placementPhoto);
   const handoverPhoto = pickUrl(rec.handoverPhoto);
   const placementAt = rec.placementAt || pickUploadedAt(rec.placementPhoto) || null;
-  // System-auto handover date: backend handoverAt (server time when handoverPhoto uploaded), fallback to handoverPhoto.uploadedAt
   const handoverAt = rec.handoverAt || pickUploadedAt(rec.handoverPhoto) || createdAt;
   const handoverPhotoUploadedAt = pickUploadedAt(rec.handoverPhoto);
   const placementPhotoUploadedAt = pickUploadedAt(rec.placementPhoto);
   const location = rec.location || null;
   const status = rec.status || 'active';
-  return { ...rec, id, _id: id, createdAt, keyCount, handoverName, handoverRole, handoverContact, lockPhoto, keyPhoto, placementPhoto, handoverPhoto, location, status, handoverAt, placementAt, handoverPhotoUploadedAt, placementPhotoUploadedAt };
+  const handoverPersons = Array.isArray(rec.handoverPersons) ? rec.handoverPersons.map(p=>({
+    name: p.name || '',
+    role: p.role || '',
+    contactNumber: p.contactNumber || p.contact || '',
+    personId: p.personId || null,
+    status: p.status || 'active',
+    photo: pickUrl(p.photo),
+    photoFileId: p.photo?.fileId || null,
+  })) : [];
+  return { ...rec, id, _id: id, createdAt, keyCount, handoverName, handoverRole, handoverContact, lockPhoto, keyPhoto, placementPhoto, handoverPhoto, location, status, handoverAt, placementAt, handoverPhotoUploadedAt, placementPhotoUploadedAt, handoverPersons };
 };
 
 export default function HistoryPage() {
   const dispatch = useDispatch();
+  const navigate = useNavigate();
   const { records: rawRecords, loading, error, pagination } = useSelector(selectRecordsState);
   const currentUser = useSelector(selectCurrentUser);
   const [searchTerm, setSearchTerm] = useState('');
@@ -69,7 +80,9 @@ export default function HistoryPage() {
   const containerRef = useRef(null);
   const handoverInputRef = useRef(null);
   const placementInputRef = useRef(null);
+  const personPhotoInputRef = useRef(null);
   const [targetId, setTargetId] = useState(null);
+  const [targetPerson, setTargetPerson] = useState(null); // {id, idx}
 
   useEffect(() => { dispatch(fetchRecords({ page: 1, limit: 50 })); }, [dispatch]);
 
@@ -102,6 +115,7 @@ export default function HistoryPage() {
 
   const triggerHandoverChange = (id) => { setTargetId(id); handoverInputRef.current?.click(); };
   const triggerPlacementChange = (id) => { setTargetId(id); placementInputRef.current?.click(); };
+  const triggerPersonPhotoChange = (id, idx) => { setTargetPerson({ id, idx }); personPhotoInputRef.current?.click(); };
 
   const onHandoverFile = async (e) => {
     const file = e.target.files?.[0];
@@ -122,6 +136,31 @@ export default function HistoryPage() {
     setUpdatingId(null);
     e.target.value='';
     if (result.meta.requestStatus === 'rejected') alert(result.payload || 'Update failed');
+  };
+  const onPersonPhotoFile = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file || !targetPerson) return;
+    if (!file.type.startsWith('image/')) { alert('Only images allowed'); e.target.value=''; return; }
+    setUpdatingId(targetPerson.id);
+    const fd = new FormData();
+    fd.append(`personPhoto_${targetPerson.idx}`, file);
+    const result = await dispatch(updateRecord({ id: targetPerson.id, formData: fd }));
+    setUpdatingId(null);
+    e.target.value='';
+    setTargetPerson(null);
+    if (result.meta.requestStatus === 'rejected') alert(result.payload || 'Update failed');
+  };
+  const handlePersonStatusChange = async (rec, idx, newStatus) => {
+    const allowed = ["active","inactive","returned","lost"];
+    if (!allowed.includes(newStatus)) return;
+    setUpdatingId(rec.id);
+    const updatedPersons = (rec.handoverPersons || []).map((p,i)=> i===idx ? { ...p, status: newStatus } : p);
+    // ensure we send as JSON string for backend
+    const fd = new FormData();
+    fd.append('handoverPersons', JSON.stringify(updatedPersons.map(p=>({ name: p.name, role: p.role, contact: p.contactNumber, contactNumber: p.contactNumber, personId: p.personId, status: p.status, photo: p.photo ? {url: p.photo} : undefined }))));
+    const result = await dispatch(updateRecord({ id: rec.id, formData: fd }));
+    setUpdatingId(null);
+    if (result.meta.requestStatus === 'rejected') alert(result.payload || 'Status update failed');
   };
 
   const startEditDetails = (rec) => {
@@ -159,6 +198,7 @@ export default function HistoryPage() {
       {/* Hidden file inputs for photo changes */}
       <input ref={handoverInputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={onHandoverFile} />
       <input ref={placementInputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={onPlacementFile} />
+      <input ref={personPhotoInputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={onPersonPhotoFile} />
 
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 glass-panel p-6 rounded-3xl border border-slate-200/50 dark:border-slate-800/80 shadow-sm">
         <div>
@@ -181,6 +221,7 @@ export default function HistoryPage() {
           <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="px-3 py-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-sm font-medium text-slate-700 dark:text-slate-300">
             <option value="">All status</option>
             <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
             <option value="returned">Returned</option>
             <option value="lost">Lost</option>
           </select>
@@ -223,19 +264,38 @@ export default function HistoryPage() {
                     <span>Handover (system): <strong>{formatDateTime(rec.handoverAt)}</strong></span>
                     <span className="ml-auto text-[9px] opacity-70">auto on photo upload</span>
                   </div>
+                  {/* Incomplete steps indicator + Edit/Continue */}
+                  {(() => {
+                    const missing = [];
+                    if (!rec.lockPhoto) missing.push('Lock');
+                    if (!rec.keyPhoto) missing.push('Key');
+                    if (!rec.placementPhoto) missing.push('Placement');
+                    const personsMissing = !rec.handoverPersons?.length || rec.handoverPersons.some(p=>!p.photo || !p.name?.trim());
+                    if (personsMissing) missing.push('Handover');
+                    const isDraft = missing.length > 0;
+                    return (
+                      <div className={`flex items-center gap-2 p-2.5 rounded-xl border text-xs ${isDraft ? 'bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200' : 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300'}`}>
+                        <span className="font-bold">{isDraft ? `Incomplete: ${missing.join(', ')} — continue editing` : 'All 5 steps complete ✓'}</span>
+                        <button onClick={() => navigate(`/wizard/edit/${rec.id}`)} className={`ml-auto flex items-center gap-1 px-3 py-1.5 rounded-lg font-bold text-xs shadow-sm border ${isDraft ? 'bg-amber-600 hover:bg-amber-700 text-white border-amber-700' : 'bg-white dark:bg-slate-900 hover:bg-slate-50 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300'}`}>
+                          <Pencil className="h-3.5 w-3.5" /> {isDraft ? 'Continue / Edit Steps' : 'Edit All Steps'}
+                        </button>
+                      </div>
+                    );
+                  })()}
 
                 </div>
 
                 {!isExpanded && (
                   <div className="px-6 pb-4 grid grid-cols-4 gap-2">
-                    {[rec.lockPhoto, rec.keyPhoto, rec.placementPhoto, rec.handoverPhoto].map((p, i) => (
+                    {[rec.lockPhoto, rec.keyPhoto, rec.placementPhoto, rec.handoverPhoto || (rec.handoverPersons && rec.handoverPersons[0]?.photo)].map((p, i) => (
                       <div key={i} className="aspect-square bg-slate-900 rounded-lg overflow-hidden border border-slate-200/50 dark:border-slate-800 relative">
                         {p ? (
                           <>
                             <img src={p} alt="thumb" className="w-full h-full object-cover" onError={(e)=>{ e.currentTarget.style.display='none'; const fb=e.currentTarget.nextElementSibling; if(fb) fb.style.display='flex'; }} />
                             <div className="hidden absolute inset-0 items-center justify-center text-[10px] text-slate-500 bg-slate-800 p-1 text-center" style={{display:'none'}}>Unavailable</div>
                           </>
-                        ) : <div className="h-full w-full flex items-center justify-center text-[10px] text-slate-500 bg-slate-800">No Photo</div>}
+                        ) : <div className="h-full w-full flex items-center justify-center text-[10px] text-slate-500 bg-slate-800">{i===3 ? `${rec.handoverPersons?.length || 0} persons` : 'No Photo'}</div>}
+                        {i===3 && rec.handoverPersons?.length > 1 && p && <div className="absolute bottom-0.5 right-0.5 bg-primary-600 text-white text-[8px] px-1 rounded-full font-bold">+{rec.handoverPersons.length}</div>}
                       </div>
                     ))}
                   </div>
@@ -343,6 +403,7 @@ export default function HistoryPage() {
                               <label className="text-[10px] font-bold uppercase text-slate-500">Status</label>
                               <select value={editForm.status} onChange={(e)=>setEditForm({...editForm, status:e.target.value})} className="mt-1 w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm">
                                 <option value="active">Active</option>
+                                <option value="inactive">Inactive</option>
                                 <option value="returned">Returned</option>
                                 <option value="lost">Lost</option>
                               </select>
@@ -351,6 +412,46 @@ export default function HistoryPage() {
                         </div>
                       )}
                     </div>
+
+                    {/* Per-key persons — individual photo & status enum */}
+                    {rec.handoverPersons && rec.handoverPersons.length > 0 && (
+                      <div className="rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 space-y-3">
+                        <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5"><Users className="h-3.5 w-3.5" /> Keys — Per-Person Photo & Status (update anytime)</h4>
+                        <p className="text-[11px] text-slate-400">Each key’s receiver has its own image and status (<span className="font-mono font-bold">active / inactive / returned / lost</span>). You can update remaining steps later.</p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          {rec.handoverPersons.map((p, idx)=> (
+                            <div key={idx} className="p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 space-y-2">
+                              <div className="flex items-center gap-2">
+                                <span className="h-7 w-7 rounded-lg bg-primary-100 dark:bg-primary-900/40 text-primary-700 flex items-center justify-center text-xs font-bold">{idx+1}</span>
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-xs font-bold truncate">{p.name || 'Unnamed'} </p>
+                                  <p className="text-[11px] text-slate-500 truncate">{p.role || 'No role'}</p>
+                                </div>
+                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase border ${p.status==='active'?'bg-emerald-50 text-emerald-700 border-emerald-200': p.status==='inactive'?'bg-slate-100 text-slate-600 border-slate-200': p.status==='returned'?'bg-blue-50 text-blue-700 border-blue-200':'bg-red-50 text-red-700 border-red-200'}`}>{p.status}</span>
+                              </div>
+                              <div className="aspect-video bg-slate-900 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 relative">
+                                {p.photo ? <img src={p.photo} alt={`Person ${idx+1}`} className="w-full h-full object-cover" onError={(e)=>{ e.currentTarget.style.display='none'; }} /> : <div className="h-full w-full flex flex-col items-center justify-center text-[11px] text-slate-500 bg-slate-800 p-2 text-center">No Photo<br/><span className="text-[10px] text-amber-400">Add later</span></div>}
+                              </div>
+                              <div className="flex gap-1">
+                                <button onClick={()=> triggerPersonPhotoChange(rec.id, idx)} disabled={isUpdating} className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-semibold hover:bg-slate-50 disabled:opacity-50">
+                                  {isUpdating ? <RefreshCw className="h-3 w-3 animate-spin"/> : <ImagePlus className="h-3 w-3"/>} {p.photo ? 'Change' : 'Add'} Photo
+                                </button>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <label className="text-[11px] font-bold text-slate-500">Status:</label>
+                                <select value={p.status} onChange={(e)=> handlePersonStatusChange(rec, idx, e.target.value)} disabled={isUpdating} className="flex-1 px-2 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-semibold">
+                                  <option value="active">active</option>
+                                  <option value="inactive">inactive</option>
+                                  <option value="returned">returned</option>
+                                  <option value="lost">lost</option>
+                                </select>
+                              </div>
+                              {p.contactNumber && <p className="text-[11px] text-slate-500 flex items-center gap-1"><Phone className="h-3 w-3"/> {p.contactNumber}</p>}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
 
                     {currentUser?.role === 'admin' && (
                       <button onClick={() => handleDelete(rec.id)} className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 font-semibold text-sm border border-red-100 dark:border-red-900/30 hover:bg-red-100">

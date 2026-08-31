@@ -1,16 +1,33 @@
 import { body, validationResult } from "express-validator";
 
 export const validateCreateRecord = [
-  body("keyCount")
-    .notEmpty().withMessage("keyCount is required")
-    .isInt({ min: 1 }).withMessage("keyCount must be an integer >= 1")
-    .toInt(),
-  body("handoverName").notEmpty().withMessage("handoverName is required").trim().isLength({ min: 2 }).withMessage("handoverName must be at least 2 chars"),
+  body("keyCount").optional().isInt({ min: 1 }).withMessage("keyCount must be an integer >= 1").toInt(),
+  body("handoverName").optional().trim().isLength({ min: 2 }).withMessage("handoverName must be at least 2 chars"),
   body("handoverRole").optional().trim(),
   body("handoverContact").optional().trim(),
+  body("handoverPersonId").optional().isMongoId().withMessage("handoverPersonId must be valid id"),
+  body("savedLocationId").optional().isMongoId().withMessage("savedLocationId must be valid id"),
   body("lat").optional().isFloat({ min: -90, max: 90 }).withMessage("lat must be between -90 and 90").toFloat(),
   body("lng").optional().isFloat({ min: -180, max: 180 }).withMessage("lng must be between -180 and 180").toFloat(),
-  body("status").optional().isIn(["active", "returned", "lost"]).withMessage("status must be active, returned or lost"),
+  body("status").optional().isIn(["active", "inactive", "returned", "lost"]).withMessage("status must be active, inactive, returned or lost"),
+  // handoverPersons JSON array validation — each entry may be partial for draft saves
+  body("handoverPersons").optional().custom((value) => {
+    try {
+      const arr = typeof value === 'string' ? JSON.parse(value) : value;
+      if (!Array.isArray(arr)) throw new Error("handoverPersons must be an array");
+      const allowed = ["active","inactive","returned","lost"];
+      for (let i=0;i<arr.length;i++) {
+        const p = arr[i];
+        if (p.status && !allowed.includes(p.status)) throw new Error(`handoverPersons[${i}].status must be one of ${allowed.join(", ")}`);
+        if (p.personId && typeof p.personId === 'string' && p.personId.length!==24) {
+          // allow empty but if provided must be 24 hex-ish; defer to isMongoId elsewhere
+        }
+      }
+      return true;
+    } catch(e){
+      throw new Error(e.message || "Invalid handoverPersons JSON");
+    }
+  }),
   (req, res, next) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -27,7 +44,21 @@ export const validateUpdateRecord = [
   body("handoverContact").optional().trim(),
   body("lat").optional().isFloat({ min: -90, max: 90 }).withMessage("lat must be between -90 and 90").toFloat(),
   body("lng").optional().isFloat({ min: -180, max: 180 }).withMessage("lng must be between -180 and 180").toFloat(),
-  body("status").optional().isIn(["active", "returned", "lost"]).withMessage("status must be active, returned or lost"),
+  body("status").optional().isIn(["active", "inactive", "returned", "lost"]).withMessage("status must be active, inactive, returned or lost"),
+  body("handoverPersons").optional().custom((value) => {
+    try {
+      const arr = typeof value === 'string' ? JSON.parse(value) : value;
+      if (!Array.isArray(arr)) throw new Error("handoverPersons must be an array");
+      const allowed = ["active","inactive","returned","lost"];
+      for (let i=0;i<arr.length;i++) {
+        const p = arr[i];
+        if (p.status && !allowed.includes(p.status)) throw new Error(`handoverPersons[${i}].status must be one of ${allowed.join(", ")}`);
+      }
+      return true;
+    } catch(e){
+      throw new Error(e.message || "Invalid handoverPersons JSON");
+    }
+  }),
   (req, res, next) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {

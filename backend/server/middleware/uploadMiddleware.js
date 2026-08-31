@@ -21,6 +21,19 @@ export const uploadFields = upload.fields([
   { name: "keyPhoto", maxCount: 1 },
   { name: "placementPhoto", maxCount: 1 },
   { name: "handoverPhoto", maxCount: 1 },
+  { name: "personPhoto_0", maxCount: 1 },
+  { name: "personPhoto_1", maxCount: 1 },
+  { name: "personPhoto_2", maxCount: 1 },
+  { name: "personPhoto_3", maxCount: 1 },
+  { name: "personPhoto_4", maxCount: 1 },
+  { name: "personPhoto_5", maxCount: 1 },
+  { name: "personPhoto_6", maxCount: 1 },
+  { name: "personPhoto_7", maxCount: 1 },
+  { name: "personPhoto_8", maxCount: 1 },
+  { name: "personPhoto_9", maxCount: 1 },
+  // also support alternative naming with bracket style
+  { name: "handoverPersons[0][photo]", maxCount: 1 },
+  { name: "handoverPersons[1][photo]", maxCount: 1 },
 ]);
 
 // Single-field uploaders for dedicated photo-change endpoints (handover / placement)

@@ -52,6 +52,16 @@ const AnimatedRoutes = () => {
           }
         />
         <Route
+          path="/wizard/edit/:id"
+          element={
+            <ProtectedRoute>
+              <PageWrapper>
+                <WizardPage />
+              </PageWrapper>
+            </ProtectedRoute>
+          }
+        />
+        <Route
           path="/history"
           element={
             <ProtectedRoute>

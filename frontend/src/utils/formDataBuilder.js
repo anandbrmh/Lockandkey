@@ -31,11 +31,27 @@ export const buildRecordFormData = (wizardState) => {
   if (wizardState.handoverName) formData.append('handoverName', wizardState.handoverName);
   if (wizardState.handoverRole) formData.append('handoverRole', wizardState.handoverRole);
   if (wizardState.handoverContact) formData.append('handoverContact', wizardState.handoverContact);
-  // New: multiple handover persons array (JSON)
+  // New: multiple handover persons array (JSON) — each with per-person status enum
   if (Array.isArray(wizardState.handoverPersons) && wizardState.handoverPersons.length > 0) {
-    // send as JSON string; backend will parse
-    formData.append('handoverPersons', JSON.stringify(wizardState.handoverPersons));
-    // also send per-person ids if any (comma-separated for reuse)
+    // Sanitize persons for JSON — omit raw base64 photo (sent as files), keep reused URLs and status
+    const sanitizedPersons = wizardState.handoverPersons.map(p => {
+      const base = {
+        name: p.name || '',
+        role: p.role || '',
+        contact: p.contact || '',
+        contactNumber: p.contact || '',
+        personId: p.personId || null,
+        status: p.status || 'active',
+      };
+      // If photo is reused http URL, include it so backend can keep reference without re-upload
+      if (p.photo && typeof p.photo === 'string' && p.photo.startsWith('http')) {
+        base.photo = { url: p.photo };
+      } else if (p.photo && typeof p.photo === 'object' && p.photo.url) {
+        base.photo = p.photo;
+      }
+      return base;
+    });
+    formData.append('handoverPersons', JSON.stringify(sanitizedPersons));
     const personIds = wizardState.handoverPersons.map(p => p.personId).filter(Boolean);
     if (personIds.length) formData.append('handoverPersonIds', JSON.stringify(personIds));
   }
@@ -64,16 +80,24 @@ export const buildRecordFormData = (wizardState) => {
     const file = dataURLtoFile(wizardState.placementPhoto, 'placement.jpg');
     if (file) formData.append('placementPhoto', file);
   }
-  // handoverPhoto: skip if reused
+  // handoverPhoto legacy group photo: skip if reused (now secondary to per-person photos)
   if (wizardState.handoverPhoto && isDataUrl(wizardState.handoverPhoto) && !wizardState.handoverPhotoIsReused) {
     const file = dataURLtoFile(wizardState.handoverPhoto, 'handover.jpg');
     if (file) formData.append('handoverPhoto', file);
   } else if (wizardState.handoverPhoto && isDataUrl(wizardState.handoverPhoto) && wizardState.handoverPhotoIsReused) {
-    // Should not happen because reused flag cleared on data: upload, but handle
     const file = dataURLtoFile(wizardState.handoverPhoto, 'handover.jpg');
     if (file) formData.append('handoverPhoto', file);
   }
-  // If photos are reused ImageKit URLs (not data:), we rely on IDs — no file appended, saving ImageKit bandwidth
+
+  // Per-person photos: each as personPhoto_<idx> if data URL (new capture)
+  if (Array.isArray(wizardState.handoverPersons)) {
+    wizardState.handoverPersons.forEach((p, idx) => {
+      if (p.photo && isDataUrl(p.photo) && !p.photoIsReused) {
+        const file = dataURLtoFile(p.photo, `person-${idx}.jpg`);
+        if (file) formData.append(`personPhoto_${idx}`, file);
+      }
+    });
+  }
 
   // Also pack metadata JSON for debugging/audit (backend ignores unknown fields safely)
   formData.append('metadata', JSON.stringify(wizardState.metadata || {}));

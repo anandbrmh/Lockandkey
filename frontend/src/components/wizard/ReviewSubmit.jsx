@@ -2,9 +2,9 @@ import React, { useEffect, useRef } from 'react';
 import { useSelector } from 'react-redux';
 import { selectWizard } from '../../features/wizard/wizardSlice';
 import { gsap } from 'gsap';
-import { Calendar, User, Briefcase, Phone, Hash, Key, CheckSquare, Users, Image as ImageIcon } from 'lucide-react';
+import { Calendar, User, Briefcase, Phone, Hash, Key, CheckSquare, Users, Image as ImageIcon, AlertCircle, ShieldCheck } from 'lucide-react';
 
-export default function ReviewSubmit({ onSubmit, isSubmitting }) {
+export default function ReviewSubmit({ onSubmit, isSubmitting, isEditing }) {
   const wizardState = useSelector(selectWizard);
   const containerRef = useRef(null);
 
@@ -46,8 +46,8 @@ export default function ReviewSubmit({ onSubmit, isSubmitting }) {
     { label: 'Lock Photo', src: lockPhoto, meta: metadata.lockPhoto },
     { label: `Key Photo (${keyCountNum} ${keyCountNum === 1 ? 'key' : 'keys'})`, src: keyPhoto, meta: metadata.keyPhoto },
     { label: 'Placement Photo', src: placementPhoto, meta: metadata.placementPhoto },
-    { label: 'Handover Photo', src: handoverPhoto, meta: metadata.handoverPhoto },
   ];
+  const hasAnyMissing = !lockPhoto || !keyPhoto || !placementPhoto || personsForDisplay.some(p=>!p.photo);
 
   return (
     <div ref={containerRef} className="space-y-8">
@@ -68,13 +68,13 @@ export default function ReviewSubmit({ onSubmit, isSubmitting }) {
       </div>
 
       {/* Grid of Photos */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 reveal-item">
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 reveal-item">
         {photos.map((photo, index) => (
           <div
             key={index}
             className="group relative overflow-hidden rounded-2xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col"
           >
-            <div className="aspect-square w-full overflow-hidden bg-slate-900 relative">
+            <div className="aspect-video w-full overflow-hidden bg-slate-900 relative">
               {photo.src ? (
                 <>
                   <img
@@ -90,27 +90,49 @@ export default function ReviewSubmit({ onSubmit, isSubmitting }) {
                   </div>
                 </>
               ) : (
-                <div className="flex flex-col items-center justify-center h-full text-slate-500 gap-1">
+                <div className="flex flex-col items-center justify-center h-full text-slate-500 gap-1 p-6">
                   <ImageIcon className="h-6 w-6 opacity-40" />
-                  <span className="text-xs">Missing</span>
+                  <span className="text-xs">{photo.label} — Missing (can add later)</span>
+                  <span className="text-[10px] text-amber-600">Draft: update later from History</span>
                 </div>
               )}
             </div>
-            
             <div className="p-3">
-              <h4 className="text-xs font-bold text-slate-700 dark:text-slate-300 truncate">
-                {photo.label}
-              </h4>
+              <h4 className="text-xs font-bold text-slate-700 dark:text-slate-300 truncate">{photo.label}</h4>
               <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1 flex items-center gap-1">
                 <Calendar className="h-3 w-3 shrink-0" />
-                {photo.meta?.timestamp
-                  ? new Date(photo.meta.timestamp).toLocaleTimeString()
-                  : 'N/A'}
+                {photo.meta?.timestamp ? new Date(photo.meta.timestamp).toLocaleTimeString() : photo.src ? 'Captured' : 'Not yet'}
               </p>
             </div>
           </div>
         ))}
+        {/* Per-person photos */}
+        {personsForDisplay.map((person, idx)=> (
+          <div key={`person-photo-${idx}`} className="group relative overflow-hidden rounded-2xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col">
+            <div className="aspect-video w-full overflow-hidden bg-slate-900 relative">
+              {person.photo ? (
+                <img src={person.photo} alt={`Person ${idx+1}`} className="w-full h-full object-cover" onError={(e)=>{ e.currentTarget.style.display='none'; }} />
+              ) : (
+                <div className="flex flex-col items-center justify-center h-full text-slate-500 gap-1 p-4 text-center">
+                  <ImageIcon className="h-6 w-6 opacity-40" />
+                  <span className="text-xs font-semibold">Person {idx+1} Photo — Missing</span>
+                  <span className="text-[10px] text-amber-600">Can be added later</span>
+                </div>
+              )}
+              <div className={`absolute top-2 left-2 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase border ${ (person.status||'active')==='active'?'bg-emerald-600 text-white border-emerald-700': (person.status==='inactive'?'bg-slate-600 text-white': person.status==='returned'?'bg-blue-600 text-white':'bg-red-600 text-white')}`}>{person.status||'active'}</div>
+            </div>
+            <div className="p-3">
+              <h4 className="text-xs font-bold text-slate-700 dark:text-slate-300 truncate">Person {idx+1} — {person.name || 'Unnamed'}</h4>
+              <p className="text-[10px] text-slate-400 truncate">{person.role || 'No role'} • {person.status||'active'}</p>
+            </div>
+          </div>
+        ))}
       </div>
+      {hasAnyMissing && (
+        <div className="flex items-center gap-2 p-3 bg-amber-50 dark:bg-amber-950/20 text-amber-700 dark:text-amber-300 rounded-xl text-xs border border-amber-100 dark:border-amber-900/30 reveal-item">
+          <AlertCircle className="h-4 w-4 shrink-0" /> Draft save allowed with only Lock Photo. Missing photos/steps can be updated later from History → Expand & Edit.
+        </div>
+      )}
 
       {/* Info Details Section */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -121,37 +143,38 @@ export default function ReviewSubmit({ onSubmit, isSubmitting }) {
             <span>{personsForDisplay.length > 1 ? `Handover Persons (${personsForDisplay.length})` : 'Handover Person'}</span>
           </h3>
 
-          <div className="space-y-4 max-h-[320px] overflow-y-auto pr-1">
+          <div className="space-y-4 max-h-[360px] overflow-y-auto pr-1">
             {personsForDisplay.map((person, idx) => (
               <div key={idx} className={`space-y-3 ${idx !== personsForDisplay.length - 1 ? 'pb-4 border-b border-slate-100 dark:border-slate-800/60' : ''}`}>
                 <div className="flex items-center gap-2">
                   <span className="h-6 w-6 rounded-lg bg-primary-100 dark:bg-primary-900/40 text-primary-700 dark:text-primary-300 flex items-center justify-center text-xs font-bold">{idx + 1}</span>
                   <span className="text-xs font-black tracking-wider uppercase text-slate-600 dark:text-slate-400">Person {idx + 1} {keyCountNum > 1 && <span className="normal-case font-semibold text-slate-400">— Key {idx + 1}</span>}</span>
-                  {person.personId && (
-                    <span className="ml-auto text-[10px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/30 px-2 py-0.5 rounded-full border border-emerald-100 dark:border-emerald-900/30">Reused ✓</span>
-                  )}
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase border ${ (person.status||'active')==='active'?'bg-emerald-50 text-emerald-700 border-emerald-200': (person.status==='inactive'?'bg-slate-100 text-slate-600 border-slate-200': (person.status==='returned'?'bg-blue-50 text-blue-700 border-blue-200':'bg-red-50 text-red-700 border-red-200'))}`}>{person.status||'active'}</span>
+                  {person.personId && <span className="ml-auto text-[10px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/30 px-2 py-0.5 rounded-full border border-emerald-100 dark:border-emerald-900/30">Reused ✓</span>}
                 </div>
+                {person.photo && (
+                  <div className="h-16 w-16 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800 bg-slate-100">
+                    <img src={person.photo} alt={`Person ${idx+1}`} className="h-full w-full object-cover" />
+                  </div>
+                )}
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
-                      <CheckSquare className="h-3.5 w-3.5" /> Name
-                    </span>
-                    <span className="text-sm font-bold text-slate-800 dark:text-slate-100 truncate max-w-[60%] text-right">{person.name || <span className="italic text-slate-400">Not provided</span>}</span>
+                    <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 flex items-center gap-1.5"><CheckSquare className="h-3.5 w-3.5" /> Name</span>
+                    <span className="text-sm font-bold text-slate-800 dark:text-slate-100 truncate max-w-[60%] text-right">{person.name || <span className="italic text-slate-400">Not provided — can add later</span>}</span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
-                      <Briefcase className="h-3.5 w-3.5" /> Designation
-                    </span>
+                    <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 flex items-center gap-1.5"><Briefcase className="h-3.5 w-3.5" /> Designation</span>
                     <span className="text-sm font-semibold text-slate-800 dark:text-slate-100 truncate max-w-[60%] text-right">{person.role || <span className="italic text-slate-400">Not provided</span>}</span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
-                      <Phone className="h-3.5 w-3.5" /> Contact
-                    </span>
-                    <span className="text-sm font-semibold text-slate-800 dark:text-slate-100 truncate max-w-[60%] text-right">
-                      {person.contact || <span className="italic text-slate-400">Not Provided</span>}
-                    </span>
+                    <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 flex items-center gap-1.5"><Phone className="h-3.5 w-3.5" /> Contact</span>
+                    <span className="text-sm font-semibold text-slate-800 dark:text-slate-100 truncate max-w-[60%] text-right">{person.contact || <span className="italic text-slate-400">Not Provided</span>}</span>
                   </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 flex items-center gap-1.5"><ShieldCheck className="h-3.5 w-3.5" /> Key Status</span>
+                    <span className="text-xs font-bold uppercase px-2 py-0.5 rounded-full border bg-white dark:bg-slate-800">{person.status||'active'}</span>
+                  </div>
+                  {!person.photo && <p className="text-[11px] text-amber-600 bg-amber-50 dark:bg-amber-950/20 px-2 py-1 rounded-lg">Photo missing — can be added later via History edit</p>}
                 </div>
               </div>
             ))}
@@ -194,18 +217,24 @@ export default function ReviewSubmit({ onSubmit, isSubmitting }) {
       </div>
 
       {/* Submit Button */}
-      <div className="reveal-item pt-4 flex justify-end">
+      <div className="reveal-item pt-4 flex flex-col sm:flex-row gap-2 justify-end">
+        <p className="text-[11px] text-slate-500 dark:text-slate-400 mr-auto self-center">You can save with only Lock Photo and complete Key / Placement / Person photos later from History → Expand & Edit. Each key has its own photo + status (<span className="font-mono font-bold">active/inactive/returned/lost</span>).</p>
         <button
           type="button"
           onClick={onSubmit}
-          disabled={isSubmitting}
-          className="w-full sm:w-auto min-w-[200px] flex items-center justify-center gap-2 bg-gradient-to-tr from-emerald-600 to-teal-500 hover:from-emerald-700 hover:to-teal-650 text-white font-bold py-3.5 px-8 rounded-xl shadow-lg shadow-emerald-500/10 hover:shadow-emerald-500/20 transition-all hover:scale-[1.02] active:scale-98 disabled:opacity-50 disabled:scale-100"
+          disabled={isSubmitting || !lockPhoto}
+          title={!lockPhoto ? 'Lock Photo required' : hasAnyMissing ? 'Save draft — incomplete steps can be updated later' : 'All steps complete'}
+          className="w-full sm:w-auto min-w-[220px] flex items-center justify-center gap-2 bg-gradient-to-tr from-emerald-600 to-teal-500 hover:from-emerald-700 hover:to-teal-650 text-white font-bold py-3.5 px-8 rounded-xl shadow-lg shadow-emerald-500/10 hover:shadow-emerald-500/20 transition-all hover:scale-[1.02] active:scale-98 disabled:opacity-50 disabled:scale-100"
         >
           {isSubmitting ? (
             <>
               <div className="h-5 w-5 border-2 border-t-transparent border-white rounded-full animate-spin" />
-              <span>Submitting Records...</span>
+              <span>{isEditing ? 'Updating...' : 'Saving...'}</span>
             </>
+          ) : isEditing ? (
+            <span>{hasAnyMissing ? 'Update Draft (Complete Later Again)' : 'Update Record in Vault'}</span>
+          ) : hasAnyMissing ? (
+            <span>Save Draft to Vault (Complete Later)</span>
           ) : (
             <span>Submit to Vault</span>
           )}
