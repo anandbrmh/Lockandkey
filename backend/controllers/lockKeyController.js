@@ -534,3 +534,32 @@ export const getStats = async (req, res, next) => {
     next(err);
   }
 };
+
+export async function getlockandkeycounts(req, res, next) {
+  try {
+    const ownerFilter = { isDeleted: false, $or: [{ ownerId: req.user._id }, { createdBy: req.user._id }] };  
+
+
+    const [totalActive, totalReturned, totalLost, totalAll] = await Promise.all([
+      LockKeyRecord.countDocuments({ ...ownerFilter, status: "active" }),
+      LockKeyRecord.countDocuments({ ...ownerFilter, status: "returned" }),
+      LockKeyRecord.countDocuments({ ...ownerFilter, status: "lost" }),
+      LockKeyRecord.countDocuments(ownerFilter),
+    ]);
+    res.status(200).json({
+      success: true,
+      data: { 
+        totalActiveLocks: totalActive,
+        totalReturned,
+        totalLost,
+        totalRecords: totalAll
+      }
+    });
+
+  } catch (err) {
+    next(err);
+  }   
+
+}
+
+

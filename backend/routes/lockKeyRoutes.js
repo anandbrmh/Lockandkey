@@ -1,9 +1,10 @@
 import express from "express";
-import { getImageKitAuth, createRecord, listRecords, getRecord, updateRecord, updateHandoverPhoto, updatePlacementPhoto, deleteRecord, getStats } from "../controllers/lockKeyController.js";
+import { getImageKitAuth, createRecord, listRecords, getRecord, updateRecord, updateHandoverPhoto, updatePlacementPhoto, deleteRecord, getStats ,getlockandkeycounts} from "../controllers/lockKeyController.js";
 import authMiddleware from "../middleware/authMiddleware.js";
 import roleMiddleware from "../middleware/roleMiddleware.js";
 import { uploadFields, uploadHandoverPhoto, uploadPlacementPhoto } from "../middleware/uploadMiddleware.js";
 import { validateCreateRecord, validateUpdateRecord } from "../validators/lockKeyValidator.js";
+
 
 const router = express.Router();
 
@@ -12,7 +13,7 @@ router.get("/auth/imagekit", authMiddleware, getImageKitAuth);
 
 // Dashboard stats — must be before /:id
 router.get("/stats/summary", authMiddleware, getStats);
-
+router.get("/stats/lockandkeycounts", authMiddleware, getlockandkeycounts);
 // List & Create
 router.get("/", authMiddleware, listRecords);
 router.post("/", authMiddleware, uploadFields, validateCreateRecord, createRecord);

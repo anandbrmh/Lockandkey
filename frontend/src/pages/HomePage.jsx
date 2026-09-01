@@ -23,7 +23,7 @@ export default function HomePage() {
     <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 py-10">
       {/* hero */}
       <div className="text-center max-w-2xl mx-auto">
-        <p className="text-[11px] font-mono uppercase tracking-widest text-zinc-500 border border-zinc-200 rounded-full inline-flex px-3 py-1 bg-white">Wireframe · Simple</p>
+  
         <h1 className="mt-4 text-3xl sm:text-4xl font-semibold leading-tight">
           Document handover events with precision
         </h1>

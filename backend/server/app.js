@@ -37,10 +37,12 @@ app.get("/api/health", (req, res) => {
   });
 });
 
-// Middleware to fail fast if DB not connected (avoid mongoose buffering timeout -> 500)
+// Middleware to fail fast if DB is disconnected (allow connecting/connected states)
 app.use("/api", (req, res, next) => {
   if (req.path === "/health") return next();
-  if (mongoose.connection.readyState !== 1) {
+  const dbState = mongoose.connection.readyState;
+  // Allow if connected (1) or connecting (2)
+  if (dbState === 0 || dbState === 3) {
     return res.status(503).json({ success: false, message: "Database not ready, please retry" });
   }
   next();
