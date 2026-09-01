@@ -53,8 +53,9 @@ const lockKeyRecordSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// Indexes for filtering performance
+// Indexes for filtering performance — include createdBy for per-user isolation
 lockKeyRecordSchema.index({ isDeleted: 1, status: 1, createdAt: -1 });
+lockKeyRecordSchema.index({ createdBy: 1, isDeleted: 1, createdAt: -1 });
 lockKeyRecordSchema.index({ "handoverPerson.name": 1 });
 
 const LockKeyRecord = mongoose.model("LockKeyRecord", lockKeyRecordSchema);

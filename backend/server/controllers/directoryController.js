@@ -3,10 +3,12 @@ import SavedLocation from "../models/SavedLocation.js";
 import LockKeyRecord from "../models/LockKeyRecord.js";
 import { deleteFromImageKit } from "../services/storageService.js";
 
-// Sync routine: automatically harvest all persons and locations from LockKeyRecords into directory
-export const syncDirectoryFromRecords = async () => {
+// Sync routine: harvest persons/locations from LockKeyRecords into directory (scoped per user if userId provided)
+export const syncDirectoryFromRecords = async (userId = null) => {
   try {
-    const records = await LockKeyRecord.find({ isDeleted: false }).lean();
+    const filter = { isDeleted: false };
+    if (userId) filter.createdBy = userId;
+    const records = await LockKeyRecord.find(filter).lean();
     for (const rec of records) {
       if (rec.handoverPerson?.name && rec.createdBy) {
         const nameTrim = rec.handoverPerson.name.trim();
@@ -63,14 +65,14 @@ export const syncDirectoryFromRecords = async () => {
 
 export const listSavedPersons = async (req, res, next) => {
   try {
-    await syncDirectoryFromRecords();
+    await syncDirectoryFromRecords(req.user._id);
 
     const { search = "", page = 1, limit = 20 } = req.query;
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
     const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 20));
     const skip = (pageNum - 1) * limitNum;
 
-    const filter = {};
+    const filter = { createdBy: req.user._id };
 
     if (search) {
       filter.$or = [
@@ -97,7 +99,7 @@ export const listSavedPersons = async (req, res, next) => {
 
 export const getSavedPerson = async (req, res, next) => {
   try {
-    const person = await SavedPerson.findById(req.params.id);
+    const person = await SavedPerson.findOne({ _id: req.params.id, createdBy: req.user._id });
     if (!person) return res.status(404).json({ success: false, message: "Person not found" });
     res.json({ success: true, data: person });
   } catch (err) { next(err); }
@@ -105,9 +107,9 @@ export const getSavedPerson = async (req, res, next) => {
 
 export const deleteSavedPerson = async (req, res, next) => {
   try {
-    const person = await SavedPerson.findById(req.params.id);
+    const person = await SavedPerson.findOne({ _id: req.params.id, createdBy: req.user._id });
     if (!person) return res.status(404).json({ success: false, message: "Person not found" });
-    await SavedPerson.findByIdAndDelete(req.params.id);
+    await SavedPerson.deleteOne({ _id: req.params.id, createdBy: req.user._id });
     res.json({ success: true, message: "Saved person deleted" });
   } catch (err) { next(err); }
 };
@@ -116,14 +118,14 @@ export const deleteSavedPerson = async (req, res, next) => {
 
 export const listSavedLocations = async (req, res, next) => {
   try {
-    await syncDirectoryFromRecords();
+    await syncDirectoryFromRecords(req.user._id);
 
     const { search = "", page = 1, limit = 20 } = req.query;
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
     const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 20));
     const skip = (pageNum - 1) * limitNum;
 
-    const filter = {};
+    const filter = { createdBy: req.user._id };
     if (search) {
       filter.$or = [
         { label: { $regex: search, $options: "i" } },
@@ -148,7 +150,7 @@ export const listSavedLocations = async (req, res, next) => {
 
 export const getSavedLocation = async (req, res, next) => {
   try {
-    const loc = await SavedLocation.findById(req.params.id);
+    const loc = await SavedLocation.findOne({ _id: req.params.id, createdBy: req.user._id });
     if (!loc) return res.status(404).json({ success: false, message: "Location not found" });
     res.json({ success: true, data: loc });
   } catch (err) { next(err); }
@@ -156,9 +158,9 @@ export const getSavedLocation = async (req, res, next) => {
 
 export const deleteSavedLocation = async (req, res, next) => {
   try {
-    const loc = await SavedLocation.findById(req.params.id);
+    const loc = await SavedLocation.findOne({ _id: req.params.id, createdBy: req.user._id });
     if (!loc) return res.status(404).json({ success: false, message: "Location not found" });
-    await SavedLocation.findByIdAndDelete(req.params.id);
+    await SavedLocation.deleteOne({ _id: req.params.id, createdBy: req.user._id });
     res.json({ success: true, message: "Saved location deleted" });
   } catch (err) { next(err); }
 };

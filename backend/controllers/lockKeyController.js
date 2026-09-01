@@ -51,8 +51,8 @@ export const createRecord = async (req, res, next) => {
     let reusedLocationCoords = null;
 
     if (handoverPersonId) {
-      const saved = await SavedPerson.findById(handoverPersonId);
-      if (!saved) return res.status(400).json({ success: false, message: "handoverPersonId not found" });
+      const saved = await SavedPerson.findOne({ _id: handoverPersonId, createdBy: req.user._id });
+      if (!saved) return res.status(400).json({ success: false, message: "handoverPersonId not found or not owned by you" });
       if (saved.photo?.url) reusedHandoverPhoto = { url: saved.photo.url, fileId: undefined, uploadedAt: saved.photo.uploadedAt || new Date() };
       reusedHandoverPersonMeta = saved;
       saved.usageCount += 1;
@@ -61,8 +61,8 @@ export const createRecord = async (req, res, next) => {
     }
 
     if (savedLocationId) {
-      const savedLoc = await SavedLocation.findById(savedLocationId);
-      if (!savedLoc) return res.status(400).json({ success: false, message: "savedLocationId not found" });
+      const savedLoc = await SavedLocation.findOne({ _id: savedLocationId, createdBy: req.user._id });
+      if (!savedLoc) return res.status(400).json({ success: false, message: "savedLocationId not found or not owned by you" });
       if (savedLoc.photo?.url) reusedPlacementPhoto = { url: savedLoc.photo.url, fileId: undefined, uploadedAt: savedLoc.photo.uploadedAt || new Date() };
       if (savedLoc.lat != null || savedLoc.lng != null) reusedLocationCoords = { lat: savedLoc.lat, lng: savedLoc.lng };
       savedLoc.usageCount += 1;
@@ -93,10 +93,10 @@ export const createRecord = async (req, res, next) => {
         let personId = p.personId || null;
         let name = p.name, role = p.role, contact = p.contact || p.contactNumber;
         let statusVal = allowedPersonStatus.includes(p.status) ? p.status : "active";
-        // handle reuse via personId
+        // handle reuse via personId (must be owned by requester)
         if (personId) {
           try {
-            const saved = await SavedPerson.findById(personId);
+            const saved = await SavedPerson.findOne({ _id: personId, createdBy: req.user._id });
             if (saved) {
               if (!name) name = saved.name;
               if (!role) role = saved.role;
@@ -225,7 +225,7 @@ export const createRecord = async (req, res, next) => {
   }
 };
 
-// GET /api/lock-key-records — list with pagination & filters
+// GET /api/lock-key-records — list with pagination & filters (isolated per user)
 export const listRecords = async (req, res, next) => {
   try {
     const { page = 1, limit = 10, status, startDate, endDate, handoverName, sort = "-createdAt" } = req.query;
@@ -233,7 +233,7 @@ export const listRecords = async (req, res, next) => {
     const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 10));
     const skip = (pageNum - 1) * limitNum;
 
-    const filter = { isDeleted: false };
+    const filter = { isDeleted: false, createdBy: req.user._id };
     if (status) filter.status = status;
     if (handoverName) filter["handoverPerson.name"] = { $regex: handoverName, $options: "i" };
     if (startDate || endDate) {
@@ -264,10 +264,10 @@ export const listRecords = async (req, res, next) => {
   }
 };
 
-// GET /api/lock-key-records/:id
+// GET /api/lock-key-records/:id (owner only)
 export const getRecord = async (req, res, next) => {
   try {
-    const record = await LockKeyRecord.findOne({ _id: req.params.id, isDeleted: false }).populate("createdBy", "name email role");
+    const record = await LockKeyRecord.findOne({ _id: req.params.id, isDeleted: false, createdBy: req.user._id }).populate("createdBy", "name email role");
     if (!record) return res.status(404).json({ success: false, message: "Record not found" });
     res.json({ success: true, data: record });
   } catch (err) {
@@ -275,10 +275,10 @@ export const getRecord = async (req, res, next) => {
   }
 };
 
-// PATCH /api/lock-key-records/:id — update metadata/status (optional re-upload via same fields + per-person photos/status)
+// PATCH /api/lock-key-records/:id — update metadata/status (owner only)
 export const updateRecord = async (req, res, next) => {
   try {
-    const record = await LockKeyRecord.findOne({ _id: req.params.id, isDeleted: false });
+    const record = await LockKeyRecord.findOne({ _id: req.params.id, isDeleted: false, createdBy: req.user._id });
     if (!record) return res.status(404).json({ success: false, message: "Record not found" });
 
     const { keyCount, handoverName, handoverRole, handoverContact, lat, lng, status, handoverPersons: handoverPersonsRaw } = req.body;
@@ -391,10 +391,10 @@ export const updateRecord = async (req, res, next) => {
   }
 };
 
-// PATCH /api/lock-key-records/:id/handover-photo — change only handover photo, auto-sets handoverAt=now (system date, not client)
+// PATCH /api/lock-key-records/:id/handover-photo — owner only
 export const updateHandoverPhoto = async (req, res, next) => {
   try {
-    const record = await LockKeyRecord.findOne({ _id: req.params.id, isDeleted: false });
+    const record = await LockKeyRecord.findOne({ _id: req.params.id, isDeleted: false, createdBy: req.user._id });
     if (!record) return res.status(404).json({ success: false, message: "Record not found" });
     const file = req.file || req.files?.handoverPhoto?.[0];
     if (!file) return res.status(400).json({ success: false, message: "handoverPhoto file is required (field: handoverPhoto)" });
@@ -414,10 +414,10 @@ export const updateHandoverPhoto = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-// PATCH /api/lock-key-records/:id/placement-photo — change only placement photo, auto-sets placementAt=now
+// PATCH /api/lock-key-records/:id/placement-photo — owner only
 export const updatePlacementPhoto = async (req, res, next) => {
   try {
-    const record = await LockKeyRecord.findOne({ _id: req.params.id, isDeleted: false });
+    const record = await LockKeyRecord.findOne({ _id: req.params.id, isDeleted: false, createdBy: req.user._id });
     if (!record) return res.status(404).json({ success: false, message: "Record not found" });
     const file = req.file || req.files?.placementPhoto?.[0];
     if (!file) return res.status(400).json({ success: false, message: "placementPhoto file is required (field: placementPhoto)" });
@@ -437,10 +437,13 @@ export const updatePlacementPhoto = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-// DELETE /api/lock-key-records/:id — admin only, soft delete + ImageKit cleanup
+// DELETE /api/lock-key-records/:id — owner or admin, soft delete
 export const deleteRecord = async (req, res, next) => {
   try {
-    const record = await LockKeyRecord.findOne({ _id: req.params.id, isDeleted: false });
+    // Allow owner or admin to delete; admin can delete any record, otherwise must own it
+    const baseFilter = { _id: req.params.id, isDeleted: false };
+    if (req.user.role !== "admin") baseFilter.createdBy = req.user._id;
+    const record = await LockKeyRecord.findOne(baseFilter);
     if (!record) return res.status(404).json({ success: false, message: "Record not found" });
 
     record.isDeleted = true;
@@ -455,31 +458,32 @@ export const deleteRecord = async (req, res, next) => {
   }
 };
 
-// GET /api/lock-key-records/stats/summary — dashboard stats
+// GET /api/lock-key-records/stats/summary — dashboard stats (isolated per user)
 export const getStats = async (req, res, next) => {
   try {
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
     const todayEnd = new Date();
     todayEnd.setHours(23, 59, 59, 999);
+    const ownerFilter = { isDeleted: false, createdBy: req.user._id };
 
     const [totalActive, totalReturned, totalLost, totalAll, keysTodayAgg, topRecipients, recentRecords] = await Promise.all([
-      LockKeyRecord.countDocuments({ isDeleted: false, status: "active" }),
-      LockKeyRecord.countDocuments({ isDeleted: false, status: "returned" }),
-      LockKeyRecord.countDocuments({ isDeleted: false, status: "lost" }),
-      LockKeyRecord.countDocuments({ isDeleted: false }),
+      LockKeyRecord.countDocuments({ ...ownerFilter, status: "active" }),
+      LockKeyRecord.countDocuments({ ...ownerFilter, status: "returned" }),
+      LockKeyRecord.countDocuments({ ...ownerFilter, status: "lost" }),
+      LockKeyRecord.countDocuments(ownerFilter),
       LockKeyRecord.aggregate([
-        { $match: { isDeleted: false, createdAt: { $gte: todayStart, $lte: todayEnd } } },
+        { $match: { ...ownerFilter, createdAt: { $gte: todayStart, $lte: todayEnd } } },
         { $group: { _id: null, totalKeys: { $sum: "$keyCount" }, count: { $sum: 1 } } },
       ]),
       LockKeyRecord.aggregate([
-        { $match: { isDeleted: false } },
+        { $match: ownerFilter },
         { $group: { _id: "$handoverPerson.name", count: { $sum: 1 }, totalKeys: { $sum: "$keyCount" } } },
         { $sort: { count: -1 } },
         { $limit: 5 },
         { $project: { name: "$_id", count: 1, totalKeys: 1, _id: 0 } },
       ]),
-      LockKeyRecord.find({ isDeleted: false }).sort("-createdAt").limit(5).select("handoverPerson keyCount status createdAt").lean(),
+      LockKeyRecord.find(ownerFilter).sort("-createdAt").limit(5).select("handoverPerson keyCount status createdAt").lean(),
     ]);
 
     const keysToday = keysTodayAgg[0]?.totalKeys || 0;
