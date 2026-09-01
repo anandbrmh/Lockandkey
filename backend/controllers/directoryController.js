@@ -7,13 +7,17 @@ import { deleteFromImageKit } from "../services/storageService.js";
 export const syncDirectoryFromRecords = async (userId = null) => {
   try {
     const filter = { isDeleted: false };
-    if (userId) filter.createdBy = userId;
+    if (userId) {
+      // support both new ownerId and old createdBy during migration
+      filter.$or = [{ ownerId: userId }, { createdBy: userId }];
+    }
     const records = await LockKeyRecord.find(filter).lean();
     for (const rec of records) {
-      if (rec.handoverPerson?.name && rec.createdBy) {
+      const recOwner = rec.ownerId || rec.createdBy;
+      if (rec.handoverPerson?.name && recOwner) {
         const nameTrim = rec.handoverPerson.name.trim();
         const nameLower = nameTrim.toLowerCase();
-        const existing = await SavedPerson.findOne({ createdBy: rec.createdBy, nameLower });
+        const existing = await SavedPerson.findOne({ createdBy: recOwner, nameLower });
         if (!existing) {
           await SavedPerson.create({
             name: nameTrim,
@@ -21,7 +25,7 @@ export const syncDirectoryFromRecords = async (userId = null) => {
             role: rec.handoverPerson.role || undefined,
             contactNumber: rec.handoverPerson.contactNumber || undefined,
             photo: rec.handoverPhoto?.url ? rec.handoverPhoto : undefined,
-            createdBy: rec.createdBy,
+            createdBy: recOwner,
             usageCount: 1,
             lastUsedAt: rec.handoverAt || rec.createdAt || new Date(),
           });
@@ -31,14 +35,14 @@ export const syncDirectoryFromRecords = async (userId = null) => {
         }
       }
 
-      if (rec.createdBy && (rec.placementPhoto?.url || rec.location?.lat != null)) {
+      if (recOwner && (rec.placementPhoto?.url || rec.location?.lat != null)) {
         let existingLoc = null;
         if (rec.placementPhoto?.url) {
-          existingLoc = await SavedLocation.findOne({ createdBy: rec.createdBy, "photo.url": rec.placementPhoto.url });
+          existingLoc = await SavedLocation.findOne({ createdBy: recOwner, "photo.url": rec.placementPhoto.url });
         }
         if (!existingLoc && rec.location?.lat != null && rec.location?.lng != null) {
           existingLoc = await SavedLocation.findOne({
-            createdBy: rec.createdBy,
+            createdBy: recOwner,
             lat: { $gte: Number(rec.location.lat) - 0.001, $lte: Number(rec.location.lat) + 0.001 },
             lng: { $gte: Number(rec.location.lng) - 0.001, $lte: Number(rec.location.lng) + 0.001 },
           });
@@ -49,7 +53,7 @@ export const syncDirectoryFromRecords = async (userId = null) => {
             lat: rec.location?.lat != null ? Number(rec.location.lat) : undefined,
             lng: rec.location?.lng != null ? Number(rec.location.lng) : undefined,
             photo: rec.placementPhoto?.url ? rec.placementPhoto : undefined,
-            createdBy: rec.createdBy,
+            createdBy: recOwner,
             usageCount: 1,
             lastUsedAt: rec.placementAt || rec.createdAt || new Date(),
           });

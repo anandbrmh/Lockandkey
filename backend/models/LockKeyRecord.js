@@ -47,16 +47,28 @@ const lockKeyRecordSchema = new mongoose.Schema(
       enum: ["active", "inactive", "returned", "lost"],
       default: "active",
     },
-    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+    ownerId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
     isDeleted: { type: Boolean, default: false },
   },
   { timestamps: true }
 );
 
-// Indexes for filtering performance — include createdBy for per-user isolation
+// Indexes for filtering performance — include ownerId for per-user isolation
 lockKeyRecordSchema.index({ isDeleted: 1, status: 1, createdAt: -1 });
-lockKeyRecordSchema.index({ createdBy: 1, isDeleted: 1, createdAt: -1 });
+lockKeyRecordSchema.index({ ownerId: 1, isDeleted: 1, createdAt: -1 });
+
 lockKeyRecordSchema.index({ "handoverPerson.name": 1 });
+
+// Backward compat: expose `createdBy` as alias to `ownerId` for old clients/docs
+lockKeyRecordSchema.virtual("createdBy")
+  .get(function () {
+    return this.ownerId || this._doc?.createdBy;
+  })
+  .set(function (v) {
+    this.ownerId = v;
+  });
+lockKeyRecordSchema.set("toJSON", { virtuals: true });
+lockKeyRecordSchema.set("toObject", { virtuals: true });
 
 const LockKeyRecord = mongoose.model("LockKeyRecord", lockKeyRecordSchema);
 export default LockKeyRecord;
