@@ -13,7 +13,11 @@ export default function RegisterPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     const result = await dispatch(registerUser(form));
-    if (result.meta.requestStatus === 'fulfilled') navigate('/wizard');
+    if (result.meta.requestStatus === 'fulfilled') {
+      const role = result.payload?.user?.role || form.role;
+      if (role === 'staff') navigate('/staff/complete');
+      else navigate('/wizard');
+    }
   };
 
   return (

@@ -3,7 +3,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import {
   selectWizard, selectCurrentStep, nextStep, prevStep, setKeyCount,
   setHandoverDetails, selectSavedPerson, clearSavedPerson,
-  selectSavedLocation, clearSavedLocation, setPersonPhoto, removePersonPhoto, setPersonStatus, setPersonKeysGiven,
+  selectSavedLocation, clearSavedLocation, setPersonPhoto, removePersonPhoto, setPersonStatus, setPersonKeysGiven, addPerson, removePerson,
 } from '../../features/wizard/wizardSlice';
 import { fetchSavedPersons, fetchSavedLocations, selectDirectory } from '../../features/directory/directorySlice';
 import { createRecord, updateRecord, selectRecordsState } from '../../features/records/recordsSlice';
@@ -28,6 +28,8 @@ export default function LockKeyUploadWizard({ editingId }) {
   const currentStep = useSelector(selectCurrentStep);
   const { creating: isLoading, loading: updatingLoading, error: createError } = useSelector(selectRecordsState);
   const { persons = [], locations = [] } = useSelector(selectDirectory);
+  const currentUser = useSelector((s) => s.auth?.user);
+  const isAdmin = currentUser?.role === 'admin';
   const isEditing = !!editingId || !!wizardState.editingRecordId;
   const effectiveId = editingId || wizardState.editingRecordId;
 
@@ -112,58 +114,74 @@ export default function LockKeyUploadWizard({ editingId }) {
         const keyCountNum = parseInt(wizardState.keyCount) || 1;
         const handoverPersons = wizardState.handoverPersons || [];
         const totalAllocated = handoverPersons.reduce((s, p) => s + (parseInt(p.keysGiven, 10) || 1), 0);
-        const remaining = Math.max(0, keyCountNum - totalAllocated);
         return (
           <div key="handover" className="space-y-4">
             <div>
-              <h2 className="text-sm font-semibold">Handover — {handoverPersons.length} {handoverPersons.length === 1 ? 'person' : 'persons'} for {keyCountNum} keys</h2>
-              <p className="text-xs font-mono text-zinc-500">Tell how many keys each person receives. E.g. 4 keys → give 2 to Person 1, forms auto-reduce to 3 (2+1+1). Total must equal {keyCountNum}.</p>
+              <h2 className="text-sm font-semibold">Handover — {handoverPersons.length} {handoverPersons.length === 1 ? 'person form' : 'person forms'} ({keyCountNum} keys total)</h2>
+              <p className="text-xs font-mono text-zinc-500">{isAdmin ? 'Admin: browse existing staff only — photo + name come from staff record (no upload/camera).' : 'Allocating multiple keys to a person automatically reduces the number of forms needed to distribute all available keys.'}</p>
               <div className="mt-2 flex gap-2 text-xs font-mono">
-                <span className={`border rounded px-2 py-1 ${totalAllocated === keyCountNum ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-amber-50 border-amber-200 text-amber-800'}`}>Allocated: {totalAllocated}/{keyCountNum}</span>
-                {totalAllocated !== keyCountNum && <span className="border rounded px-2 py-1 bg-red-50 border-red-200 text-red-700">Remaining: {keyCountNum - totalAllocated}</span>}
-                {remaining === 0 && totalAllocated === keyCountNum && <span className="border rounded px-2 py-1 bg-emerald-50 border-emerald-200 text-emerald-700">✓ Balanced</span>}
+                <span className="border rounded px-2 py-1 bg-zinc-900 text-white border-zinc-900">Total keys: {keyCountNum}</span>
+                <span className="border rounded px-2 py-1 bg-zinc-50 border-zinc-200">Forms: {handoverPersons.length}</span>
+                <span className="border rounded px-2 py-1 bg-zinc-50 border-zinc-200">Allocated: {totalAllocated} / {keyCountNum}</span>
+                <button type="button" onClick={() => dispatch(addPerson())} className="border rounded px-2 py-1 bg-white hover:bg-zinc-900 hover:text-white border-zinc-900 flex items-center gap-1"><Plus className="h-3 w-3" /> Add person</button>
               </div>
             </div>
             {handoverPersons.map((person, idx) => {
-              const prefixBefore = handoverPersons.slice(0, idx).reduce((s, p) => s + (parseInt(p.keysGiven, 10) || 1), 0);
-              const maxForThis = keyCountNum - prefixBefore;
               return (
               <div key={idx} className="wire-card p-3 space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-mono flex items-center gap-1"><span className="h-6 w-6 rounded border border-zinc-900 flex items-center justify-center text-xs">{idx + 1}</span> Person {idx + 1} · <span className="border rounded px-1 text-[11px]">{person.status}</span> · <span className="border rounded px-1 text-[11px] bg-zinc-900 text-white">{person.keysGiven || 1} key{(person.keysGiven||1)>1?'s':''}</span></span>
-                  {person.personId ? <button type="button" onClick={() => dispatch(clearSavedPerson({ index: idx }))} className="text-xs underline">Clear</button> : <button type="button" onClick={() => { setActivePersonIdx(idx); setShowPersonBrowse(true); }} className="text-xs underline">Browse</button>}
+                  <div className="flex items-center gap-2">
+                    {handoverPersons.length > 1 && <button type="button" onClick={() => dispatch(removePerson(idx))} className="text-xs border border-red-200 bg-red-50 text-red-700 px-2 py-1 rounded">Remove</button>}
+                    {person.personId ? <button type="button" onClick={() => dispatch(clearSavedPerson({ index: idx }))} className="text-xs underline">Clear</button> : <button type="button" onClick={() => { setActivePersonIdx(idx); setShowPersonBrowse(true); }} className="text-xs underline">Browse staff</button>}
+                  </div>
                 </div>
                 <div className="space-y-1">
-                  <label className="wire-label flex items-center gap-1"><Camera className="h-3 w-3" /> Photo</label>
+                  <label className="wire-label flex items-center gap-1"><Camera className="h-3 w-3" /> Photo {isAdmin && <span className="text-[10px] font-mono text-amber-700">(staff only)</span>}</label>
                   {!person.photo ? (
-                    <div className="flex gap-2">
-                      <button type="button" onClick={() => setCameraPersonIdx(idx)} className="flex-1 wire-btn wire-btn-primary text-xs"><Camera className="h-3.5 w-3.5" /> Camera</button>
-                      <button type="button" onClick={() => personFileRefs.current[idx]?.click()} className="flex-1 wire-btn text-xs"><Upload className="h-3.5 w-3.5" /> File</button>
-                      <input ref={el => personFileRefs.current[idx] = el} type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handlePersonFile(idx, f); e.target.value = ''; }} />
-                    </div>
+                    isAdmin ? (
+                      <div className="border border-dashed border-zinc-300 rounded-md p-3 bg-zinc-50 text-center">
+                        <p className="text-xs font-mono text-zinc-500 mb-2">Admin must browse existing staff — upload/camera disabled</p>
+                        <button type="button" onClick={() => { setActivePersonIdx(idx); setShowPersonBrowse(true); }} className="wire-btn wire-btn-primary text-xs mx-auto"><Users className="h-3.5 w-3.5" /> Browse staff</button>
+                      </div>
+                    ) : (
+                      <div className="flex gap-2">
+                        <button type="button" onClick={() => setCameraPersonIdx(idx)} className="flex-1 wire-btn wire-btn-primary text-xs"><Camera className="h-3.5 w-3.5" /> Camera</button>
+                        <button type="button" onClick={() => personFileRefs.current[idx]?.click()} className="flex-1 wire-btn text-xs"><Upload className="h-3.5 w-3.5" /> File</button>
+                        <input ref={el => personFileRefs.current[idx] = el} type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handlePersonFile(idx, f); e.target.value = ''; }} />
+                      </div>
+                    )
                   ) : (
                     <div className="relative border border-zinc-200 rounded-md overflow-hidden max-w-sm">
                       <img src={person.photo} alt="" className="w-full aspect-video object-cover" />
-                      <button type="button" onClick={() => dispatch(removePersonPhoto({ index: idx }))} className="absolute top-2 right-2 h-7 w-7 bg-white border border-zinc-200 rounded-md flex items-center justify-center"><Trash2 className="h-3.5 w-3.5" /></button>
+                      {!isAdmin && (
+                        <button type="button" onClick={() => dispatch(removePersonPhoto({ index: idx }))} className="absolute top-2 right-2 h-7 w-7 bg-white border border-zinc-200 rounded-md flex items-center justify-center"><Trash2 className="h-3.5 w-3.5" /></button>
+                      )}
+                      {isAdmin && (
+                        <div className="absolute bottom-2 left-2 bg-zinc-900 text-white text-[10px] font-mono px-2 py-1 rounded">Staff photo</div>
+                      )}
                     </div>
+                  )}
+                  {isAdmin && !person.photo && (
+                    <input ref={el => personFileRefs.current[idx] = el} type="file" accept="image/*" className="hidden" />
                   )}
                 </div>
                 <div className="grid sm:grid-cols-2 gap-2">
-                  <div><label className="wire-label flex items-center gap-1"><User className="h-3 w-3" /> Name</label><input value={person.name} onChange={(e) => dispatch(setHandoverDetails({ name: e.target.value, index: idx }))} className="wire-input mt-1" placeholder="Name" /></div>
-                  <div><label className="wire-label flex items-center gap-1"><Landmark className="h-3 w-3" /> Role</label><input value={person.role} onChange={(e) => dispatch(setHandoverDetails({ role: e.target.value, index: idx }))} className="wire-input mt-1" placeholder="Role" /></div>
+                  <div><label className="wire-label flex items-center gap-1"><User className="h-3 w-3" /> Name</label><input value={person.name} onChange={(e) => dispatch(setHandoverDetails({ name: e.target.value, index: idx }))} className="wire-input mt-1" placeholder="Name" readOnly={isAdmin && !!person.personId} disabled={isAdmin && !!person.personId} /></div>
+                  <div><label className="wire-label flex items-center gap-1"><Landmark className="h-3 w-3" /> Role</label><input value={person.role} onChange={(e) => dispatch(setHandoverDetails({ role: e.target.value, index: idx }))} className="wire-input mt-1" placeholder="Role" readOnly={isAdmin && !!person.personId} disabled={isAdmin && !!person.personId} /></div>
                 </div>
                 <div className="grid sm:grid-cols-2 gap-2">
-                  <div><label className="wire-label flex items-center gap-1"><Contact className="h-3 w-3" /> Contact</label><input value={person.contact} onChange={(e) => dispatch(setHandoverDetails({ contact: e.target.value, index: idx }))} className="wire-input mt-1" placeholder="Optional" /></div>
+                  <div><label className="wire-label flex items-center gap-1"><Contact className="h-3 w-3" /> Contact</label><input value={person.contact} onChange={(e) => dispatch(setHandoverDetails({ contact: e.target.value, index: idx }))} className="wire-input mt-1" placeholder="Optional" readOnly={isAdmin && !!person.personId} disabled={isAdmin && !!person.personId} /></div>
                   <div><label className="wire-label flex items-center gap-1"><ShieldCheck className="h-3 w-3" /> Status</label><select value={person.status} onChange={(e) => dispatch(setPersonStatus({ index: idx, status: e.target.value }))} className="wire-input mt-1 bg-white"><option value="active">active</option><option value="inactive">inactive</option><option value="returned">returned</option><option value="lost">lost</option></select></div>
                 </div>
                 <div>
                   <label className="wire-label flex items-center gap-1"><Hash className="h-3 w-3" /> Keys to this person</label>
                   <div className="flex items-center gap-2 mt-1">
                     <button type="button" onClick={() => dispatch(setPersonKeysGiven({ index: idx, keysGiven: Math.max(1, (parseInt(person.keysGiven,10)||1)-1 )}))} className="h-9 w-9 border border-zinc-900 rounded-md flex items-center justify-center bg-white"><Minus className="h-4 w-4" /></button>
-                    <input type="number" min="1" max={maxForThis} value={person.keysGiven || 1} onChange={(e)=> dispatch(setPersonKeysGiven({ index: idx, keysGiven: e.target.value }))} className="flex-1 text-center wire-input" />
-                    <button type="button" onClick={() => dispatch(setPersonKeysGiven({ index: idx, keysGiven: Math.min(maxForThis, (parseInt(person.keysGiven,10)||1)+1 )}))} className="h-9 w-9 border border-zinc-900 rounded-md flex items-center justify-center bg-zinc-900 text-white"><Plus className="h-4 w-4" /></button>
+                    <input type="number" min="1" value={person.keysGiven || 1} onChange={(e)=> dispatch(setPersonKeysGiven({ index: idx, keysGiven: e.target.value }))} className="flex-1 text-center wire-input" />
+                    <button type="button" onClick={() => dispatch(setPersonKeysGiven({ index: idx, keysGiven: (parseInt(person.keysGiven,10)||1)+1 }))} className="h-9 w-9 border border-zinc-900 rounded-md flex items-center justify-center bg-zinc-900 text-white"><Plus className="h-4 w-4" /></button>
                   </div>
-                  <p className="text-[11px] font-mono text-zinc-500 mt-1">Max {maxForThis} for this row (auto-reduces forms). Example: 4 keys total + 2 here → 3 persons (2+1+1).</p>
+                  <p className="text-[11px] font-mono text-zinc-500 mt-1">One person can take multiple keys (e.g. 1 person → 5 keys).</p>
                 </div>
               </div>
               );

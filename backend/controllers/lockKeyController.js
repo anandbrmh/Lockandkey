@@ -1,8 +1,29 @@
 import LockKeyRecord from "../models/LockKeyRecord.js";
 import SavedPerson from "../models/SavedPerson.js";
 import SavedLocation from "../models/SavedLocation.js";
+import Staff from "../models/staff.js";
 import { uploadToImageKit, deleteFilesForRecord, getImageKitAuthParams } from "../services/storageService.js";
 import { upsertSavedPerson, upsertSavedLocation } from "./directoryController.js";
+
+// Helper: resolve staff person for admin handover (returns normalized data)
+const resolveStaffForHandover = async (staffId) => {
+  try {
+    const staff = await Staff.findById(staffId).lean();
+    if (!staff) return null;
+    const photo = staff.photo?.url
+      ? { url: staff.photo.url, fileId: staff.photo.fileId, uploadedAt: staff.photo.uploadedAt || new Date() }
+      : staff.imageUrl
+        ? { url: staff.imageUrl, fileId: staff.imageFileId || undefined, uploadedAt: staff.updatedAt || new Date() }
+        : null;
+    return {
+      name: staff.name,
+      role: staff.designation || staff.roleTitle || staff.department || "Staff",
+      contactNumber: staff.phone || staff.contactNumber || "",
+      photo,
+      _id: staff._id,
+    };
+  } catch { return null; }
+};
 
 // GET /api/lock-key-records/auth/imagekit — ImageKit client-upload auth params
 export const getImageKitAuth = async (req, res, next) => {
@@ -51,13 +72,25 @@ export const createRecord = async (req, res, next) => {
     let reusedLocationCoords = null;
 
     if (handoverPersonId) {
-      const saved = await SavedPerson.findOne({ _id: handoverPersonId, createdBy: req.user._id });
-      if (!saved) return res.status(400).json({ success: false, message: "handoverPersonId not found or not owned by you" });
-      if (saved.photo?.url) reusedHandoverPhoto = { url: saved.photo.url, fileId: undefined, uploadedAt: saved.photo.uploadedAt || new Date() };
-      reusedHandoverPersonMeta = saved;
-      saved.usageCount += 1;
-      saved.lastUsedAt = new Date();
-      await saved.save();
+      // Admin flow: handoverPersonId may refer to a Staff (_id) — try Staff first for admin
+      let saved = null;
+      let staffMeta = null;
+      if (req.user.role === "admin") {
+        staffMeta = await resolveStaffForHandover(handoverPersonId);
+        if (staffMeta) {
+          if (staffMeta.photo?.url) reusedHandoverPhoto = { url: staffMeta.photo.url, fileId: staffMeta.photo.fileId, uploadedAt: staffMeta.photo.uploadedAt || new Date() };
+          reusedHandoverPersonMeta = { name: staffMeta.name, role: staffMeta.role, contactNumber: staffMeta.contactNumber, photo: staffMeta.photo };
+        }
+      }
+      if (!staffMeta) {
+        saved = await SavedPerson.findOne({ _id: handoverPersonId, createdBy: req.user._id });
+        if (!saved) return res.status(400).json({ success: false, message: "handoverPersonId not found or not owned by you" });
+        if (saved.photo?.url) reusedHandoverPhoto = { url: saved.photo.url, fileId: undefined, uploadedAt: saved.photo.uploadedAt || new Date() };
+        reusedHandoverPersonMeta = saved;
+        saved.usageCount += 1;
+        saved.lastUsedAt = new Date();
+        await saved.save();
+      }
     }
 
     if (savedLocationId) {
@@ -95,25 +128,52 @@ export const createRecord = async (req, res, next) => {
         let statusVal = allowedPersonStatus.includes(p.status) ? p.status : "active";
         let keysGiven = p.keysGiven !== undefined && p.keysGiven !== "" ? parseInt(p.keysGiven, 10) : 1;
         if (isNaN(keysGiven) || keysGiven < 1) keysGiven = 1;
-        // handle reuse via personId (must be owned by requester)
+        // handle reuse via personId (must be owned by requester) — admin can reuse Staff
         if (personId) {
           try {
-            const saved = await SavedPerson.findOne({ _id: personId, createdBy: req.user._id });
-            if (saved) {
-              if (!name) name = saved.name;
-              if (!role) role = saved.role;
-              if (!contact) contact = saved.contactNumber;
-              // if per-person photo not uploaded, reuse saved person's photo
-              let existingPhoto = null;
-              if (saved.photo?.url) existingPhoto = { url: saved.photo.url, fileId: undefined, uploadedAt: saved.photo.uploadedAt || new Date() };
-              // will be overridden below if personPhoto_i exists
-              saved.usageCount += 1;
-              saved.lastUsedAt = new Date();
-              await saved.save();
-              // store for later if no upload
-              if (!req.files?.[`personPhoto_${i}`]?.[0] && existingPhoto) {
-                // keep as fallback
-                p._fallbackPhoto = existingPhoto;
+            // Try Staff first when admin (handover browse now returns Staff ids)
+            if (req.user.role === "admin") {
+              const staffData = await resolveStaffForHandover(personId);
+              if (staffData) {
+                if (!name) name = staffData.name;
+                if (!role) role = staffData.role;
+                if (!contact) contact = staffData.contactNumber;
+                let existingPhoto = null;
+                if (staffData.photo?.url) existingPhoto = { url: staffData.photo.url, fileId: staffData.photo.fileId, uploadedAt: staffData.photo.uploadedAt || new Date() };
+                if (!req.files?.[`personPhoto_${i}`]?.[0] && existingPhoto) {
+                  p._fallbackPhoto = existingPhoto;
+                }
+                // skip SavedPerson lookup when staff matched
+              } else {
+                const saved = await SavedPerson.findOne({ _id: personId, createdBy: req.user._id });
+                if (saved) {
+                  if (!name) name = saved.name;
+                  if (!role) role = saved.role;
+                  if (!contact) contact = saved.contactNumber;
+                  let existingPhoto = null;
+                  if (saved.photo?.url) existingPhoto = { url: saved.photo.url, fileId: undefined, uploadedAt: saved.photo.uploadedAt || new Date() };
+                  saved.usageCount += 1;
+                  saved.lastUsedAt = new Date();
+                  await saved.save();
+                  if (!req.files?.[`personPhoto_${i}`]?.[0] && existingPhoto) {
+                    p._fallbackPhoto = existingPhoto;
+                  }
+                }
+              }
+            } else {
+              const saved = await SavedPerson.findOne({ _id: personId, createdBy: req.user._id });
+              if (saved) {
+                if (!name) name = saved.name;
+                if (!role) role = saved.role;
+                if (!contact) contact = saved.contactNumber;
+                let existingPhoto = null;
+                if (saved.photo?.url) existingPhoto = { url: saved.photo.url, fileId: undefined, uploadedAt: saved.photo.uploadedAt || new Date() };
+                saved.usageCount += 1;
+                saved.lastUsedAt = new Date();
+                await saved.save();
+                if (!req.files?.[`personPhoto_${i}`]?.[0] && existingPhoto) {
+                  p._fallbackPhoto = existingPhoto;
+                }
               }
             }
           } catch(e){ /* ignore */ }
@@ -173,15 +233,27 @@ export const createRecord = async (req, res, next) => {
     const handoverAt = handoverPhoto ? now : (finalHandoverPersons.some(p=>p.photo) ? now : null);
     const placementAt = placementPhoto ? now : null;
 
-    // keyCount handling: if provided use it, else derive from sum of keysGiven or default 1
-    let finalKeyCount = keyCount !== undefined && keyCount !== "" ? Number(keyCount) : (finalHandoverPersons.length > 0 ? finalHandoverPersons.reduce((s,p)=>s+(parseInt(p.keysGiven,10)||1),0) : 1);
+    // keyCount handling: independent of keysGiven — one person can take multiple keys
+    let finalKeyCount = keyCount !== undefined && keyCount !== "" ? Number(keyCount) : 1;
     if (isNaN(finalKeyCount) || finalKeyCount < 1) finalKeyCount = 1;
+    // No sum validation: keysGiven per person is independent (e.g. 1 person can take 5 keys)
 
-    // Validate keysGiven sum matches keyCount when persons have names (full submit); allow draft with empty persons
-    if (finalHandoverPersons.length > 0 && finalHandoverPersons.some(p=>p.name)) {
-      const sumKeys = finalHandoverPersons.reduce((s,p)=>s+(parseInt(p.keysGiven,10)||1),0);
-      if (sumKeys !== finalKeyCount) {
-        return res.status(400).json({ success: false, message: `Sum of keysGiven (${sumKeys}) must equal keyCount (${finalKeyCount}). E.g. 4 total keys with one person taking 2 leaves 2 keys → 3 persons total (2+1+1).` });
+    // Admin browse-only enforcement: admin must select from existing staff (photo + name from staff record)
+    if (req.user.role === "admin" && finalHandoverPersons.length > 0) {
+      // Block direct person photo uploads for admin (browse only)
+      for (let i = 0; i < 10; i++) {
+        if (req.files?.[`personPhoto_${i}`]?.[0]) {
+          return res.status(400).json({ success: false, message: `Admin cannot upload handover person photo for person ${i + 1} — browse existing staff only.` });
+        }
+      }
+      for (let i = 0; i < finalHandoverPersons.length; i++) {
+        const p = finalHandoverPersons[i];
+        if (p.name && !p.personId) {
+          return res.status(400).json({ success: false, message: `Admin must browse existing staff for handover person ${i + 1} — upload/camera disabled. Select staff with image + name via Browse staff.` });
+        }
+        if (p.name && !p.photo?.url) {
+          return res.status(400).json({ success: false, message: `Staff photo required for handover person ${i + 1}. Staff must have image from staff onboarding.` });
+        }
       }
     }
 
@@ -343,14 +415,23 @@ export const updateRecord = async (req, res, next) => {
           target.photo = { url: incoming.photo.url, fileId: incoming.photo.fileId, uploadedAt: incoming.photo.uploadedAt ? new Date(incoming.photo.uploadedAt) : new Date() };
         }
       }
-      // Ensure keysGiven defaults and trim logic based on sum vs keyCount
+      // Ensure keysGiven defaults — no sum vs keyCount validation (one person can take multiple)
       record.handoverPersons.forEach(p => { if (!p.keysGiven || p.keysGiven < 1) p.keysGiven = 1; });
-      // Validate sum if persons have names
-      if (record.handoverPersons.length > 0 && record.handoverPersons.some(p=>p.name)) {
-        const sumKeys = record.handoverPersons.reduce((s,p)=>s+(parseInt(p.keysGiven,10)||1),0);
-        const kc = Number(record.keyCount) || sumKeys;
-        if (sumKeys !== kc) {
-          return res.status(400).json({ success: false, message: `Sum of keysGiven (${sumKeys}) must equal keyCount (${kc}). Adjust keys per person.` });
+      // Admin browse-only enforcement on update
+      if (req.user.role === "admin" && record.handoverPersons.length > 0) {
+        for (let i = 0; i < record.handoverPersons.length; i++) {
+          const p = record.handoverPersons[i];
+          if (p.name && !p.personId) {
+            return res.status(400).json({ success: false, message: `Admin must browse existing staff for handover person ${i + 1} — upload/camera disabled.` });
+          }
+        }
+      }
+      // Block admin per-person photo uploads (browse only)
+      if (req.user.role === "admin") {
+        for (let i = 0; i < 10; i++) {
+          if (req.files?.[`personPhoto_${i}`]?.[0]) {
+            return res.status(400).json({ success: false, message: `Admin cannot upload handover person photo for person ${i + 1} — browse existing staff only.` });
+          }
         }
       }
       // Sync legacy handoverPerson to first entry
@@ -562,4 +643,73 @@ export async function getlockandkeycounts(req, res, next) {
 
 }
 
+export async function specificlockandkey(req, res, next) {
+  try {
+    const { id } = req.params;
+    const record = await LockKeyRecord.findOne({ _id: id, isDeleted: false, $or: [{ ownerId: req.user._id }, { createdBy: req.user._id }] }).populate("ownerId", "name email role");
+    if (!record) return res.status(404).json({ success: false, message: "Record not found" });
+    res.status(200).json({
+      success: true,
+      data: record
+    });
+  } catch (err) {
+    next(err);
+  }
+} 
+
+export async function getlock(req, res, next) {
+  try {
+    const { id } = req.params;
+    const record = await LockKeyRecord.findOne({ _id: id, isDeleted: false, $or: [{ ownerId: req.user._id }, { createdBy: req.user._id }] }).populate("ownerId", "name email role");
+    if (!record) return res.status(404).json({ success: false, message: "Record not found" });
+    res.status(200).json({
+      success: true,
+      data: record.lockPhoto
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function getkey(req, res, next) {
+  try {
+    const { id } = req.params;
+    const record = await LockKeyRecord.findOne({ _id: id, isDeleted: false, $or: [{ ownerId: req.user._id }, { createdBy: req.user._id }] }).populate("ownerId", "name email role");
+    if (!record) return res.status(404).json({ success: false, message: "Record not found" });
+    res.status(200).json({
+      success: true,
+      data: record.keyPhoto
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function gethandover(req, res, next) {
+  try {
+    const { id } = req.params;
+    const record = await LockKeyRecord.findOne({ _id: id, isDeleted: false, $or: [{ ownerId: req.user._id }, { createdBy: req.user._id }] }).populate("ownerId", "name email role");
+    if (!record) return res.status(404).json({ success: false, message: "Record not found" });
+    res.status(200).json({
+      success: true,
+      data: record.handoverPhoto
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function getplacement(req, res, next) {
+  try {
+    const { id } = req.params;
+    const record = await LockKeyRecord.findOne({ _id: id, isDeleted: false, $or: [{ ownerId: req.user._id }, { createdBy: req.user._id }] }).populate("ownerId", "name email role");
+    if (!record) return res.status(404).json({ success: false, message: "Record not found" });
+    res.status(200).json({
+      success: true,
+      data: record.placementPhoto
+    });
+  } catch (err) {
+    next(err);
+  }
+} 
 

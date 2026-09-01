@@ -7,6 +7,7 @@ import mongoose from "mongoose";
 import authRoutes from "./routes/authRoutes.js";
 import lockKeyRoutes from "./routes/lockKeyRoutes.js";
 import directoryRoutes from "./routes/directoryRoutes.js";
+import staffRoutes from "./routes/staffRoutes.js";
 import errorHandler from "./middleware/errorHandler.js";
 
 dotenv.config();
@@ -52,6 +53,7 @@ app.use("/api", (req, res, next) => {
 app.use("/api/auth", authRoutes);
 app.use("/api/lock-key-records", lockKeyRoutes);
 app.use("/api/directory", directoryRoutes);
+app.use("/api/staff", staffRoutes);
 
 // 404 handler
 app.use((req, res) => {
@@ -61,4 +63,4 @@ app.use((req, res) => {
 // Centralized error handler — MUST be last
 app.use(errorHandler);
 
-export default app;
+export default app;  

@@ -1,7 +1,37 @@
 import SavedPerson from "../models/SavedPerson.js";
 import SavedLocation from "../models/SavedLocation.js";
 import LockKeyRecord from "../models/LockKeyRecord.js";
+import Staff from "../models/staff.js";
 import { deleteFromImageKit } from "../services/storageService.js";
+
+// Helper: map Staff doc to SavedPerson-like shape for admin handover browse
+const mapStaffToPerson = (s) => {
+  const photo = s.photo?.url
+    ? s.photo
+    : s.imageUrl
+      ? { url: s.imageUrl, fileId: s.imageFileId || undefined, uploadedAt: s.updatedAt || s.createdAt }
+      : null;
+  return {
+    _id: s._id,
+    name: s.name,
+    role: s.designation || s.roleTitle || s.department || "Staff",
+    contactNumber: s.phone || s.contactNumber || "",
+    email: s.email,
+    department: s.department,
+    designation: s.designation,
+    phone: s.phone,
+    photo,
+    imageUrl: s.imageUrl,
+    isStaff: true,
+    staffId: s._id,
+    userId: s.user,
+    profileCompleted: s.profileCompleted,
+    usageCount: 1,
+    lastUsedAt: s.updatedAt || s.createdAt,
+    createdAt: s.createdAt,
+    updatedAt: s.updatedAt,
+  };
+};
 
 // Sync routine: harvest persons/locations from LockKeyRecords into directory (scoped per user if userId provided)
 export const syncDirectoryFromRecords = async (userId = null) => {
@@ -69,12 +99,55 @@ export const syncDirectoryFromRecords = async (userId = null) => {
 
 export const listSavedPersons = async (req, res, next) => {
   try {
-    await syncDirectoryFromRecords(req.user._id);
-
     const { search = "", page = 1, limit = 20 } = req.query;
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
     const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 20));
     const skip = (pageNum - 1) * limitNum;
+
+    // ADMIN: only show staff-registered persons with image + name — filters Staff collection
+    if (req.user.role === "admin") {
+      const filter = {};
+      // Only completed staff profiles that have a photo (imageUrl or photo.url)
+      // We enforce photo existence so admin sees only staff with image
+      filter.$and = [
+        {
+          $or: [
+            { "photo.url": { $exists: true, $ne: null, $ne: "" } },
+            { imageUrl: { $exists: true, $ne: null, $ne: "" } },
+          ],
+        },
+      ];
+      if (search) {
+        const regex = { $regex: search, $options: "i" };
+        filter.$and.push({
+          $or: [
+            { name: regex },
+            { email: regex },
+            { department: regex },
+            { designation: regex },
+            { roleTitle: regex },
+            { phone: regex },
+            { contactNumber: regex },
+          ],
+        });
+      }
+      // If no search, still return only staff with image
+      const [records, total] = await Promise.all([
+        Staff.find(filter).sort("-updatedAt").skip(skip).limit(limitNum).lean(),
+        Staff.countDocuments(filter),
+      ]);
+      const persons = records.map(mapStaffToPerson);
+      return res.json({
+        success: true,
+        data: {
+          persons,
+          pagination: { total, page: pageNum, limit: limitNum, pages: Math.ceil(total / limitNum) },
+        },
+      });
+    }
+
+    // NON-ADMIN: existing behaviour — per-user SavedPerson directory
+    await syncDirectoryFromRecords(req.user._id);
 
     const filter = { createdBy: req.user._id };
 
@@ -103,6 +176,14 @@ export const listSavedPersons = async (req, res, next) => {
 
 export const getSavedPerson = async (req, res, next) => {
   try {
+    // Admin can fetch a staff person by staff _id
+    if (req.user.role === "admin") {
+      const staff = await Staff.findById(req.params.id).lean();
+      if (staff && (staff.photo?.url || staff.imageUrl)) {
+        return res.json({ success: true, data: mapStaffToPerson(staff) });
+      }
+      // fallback to SavedPerson if not a staff (for backward compat)
+    }
     const person = await SavedPerson.findOne({ _id: req.params.id, createdBy: req.user._id });
     if (!person) return res.status(404).json({ success: false, message: "Person not found" });
     res.json({ success: true, data: person });

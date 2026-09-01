@@ -7,6 +7,9 @@ import WizardPage from '../pages/WizardPage';
 import HistoryPage from '../pages/HistoryPage';
 import LoginPage from '../pages/LoginPage';
 import RegisterPage from '../pages/RegisterPage';
+import StaffOnboardingPage from '../pages/StaffOnboardingPage';
+import StaffDirectoryPage from '../pages/StaffDirectoryPage';
+import LocksDirectoryPage from '../pages/LocksDirectoryPage';
 import { motion, AnimatePresence } from 'framer-motion';
 
 // Page Transition wrapper component
@@ -42,9 +45,19 @@ const AnimatedRoutes = () => {
         <Route path="/login" element={<PageWrapper><LoginPage /></PageWrapper>} />
         <Route path="/register" element={<PageWrapper><RegisterPage /></PageWrapper>} />
         <Route
+          path="/staff/complete"
+          element={
+            <ProtectedRoute allowIncompleteStaff>
+              <PageWrapper>
+                <StaffOnboardingPage />
+              </PageWrapper>
+            </ProtectedRoute>
+          }
+        />
+        <Route
           path="/wizard"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute requireStaffComplete>
               <PageWrapper>
                 <WizardPage />
               </PageWrapper>
@@ -54,7 +67,7 @@ const AnimatedRoutes = () => {
         <Route
           path="/wizard/edit/:id"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute requireStaffComplete>
               <PageWrapper>
                 <WizardPage />
               </PageWrapper>
@@ -64,9 +77,29 @@ const AnimatedRoutes = () => {
         <Route
           path="/history"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute requireStaffComplete>
               <PageWrapper>
                 <HistoryPage />
+              </PageWrapper>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/staff-directory"
+          element={
+            <ProtectedRoute requireStaffComplete>
+              <PageWrapper>
+                <StaffDirectoryPage />
+              </PageWrapper>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/locks-directory"
+          element={
+            <ProtectedRoute requireStaffComplete>
+              <PageWrapper>
+                <LocksDirectoryPage />
               </PageWrapper>
             </ProtectedRoute>
           }

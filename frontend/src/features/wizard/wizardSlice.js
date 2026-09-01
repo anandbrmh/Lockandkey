@@ -2,95 +2,72 @@ import { createSlice } from '@reduxjs/toolkit';
 
 const createEmptyPerson = () => ({ name: '', role: '', contact: '', personId: null, photo: null, status: 'active', photoIsReused: false, keysGiven: 1 });
 
-const sumKeys = (persons) => (persons || []).reduce((s, p) => s + (parseInt(p.keysGiven, 10) || 1), 0);
+const rebalanceHandoverPersons = (persons, keyCount, targetIndex = null) => {
+  const kCount = Math.max(1, parseInt(keyCount, 10) || 1);
+  if (!Array.isArray(persons) || persons.length === 0) {
+    persons = [createEmptyPerson()];
+  }
 
-// Rebalance persons array so sum(keysGiven) === totalKeys
-// trims/adds trailing persons with keysGiven=1, and clamps last if needed
-const rebalanceForTotal = (persons, total) => {
-  let sum = sumKeys(persons);
-  if (sum === total) return persons;
-  if (sum < total) {
-    const newPersons = [...persons];
-    while (sum < total) {
-      newPersons.push(createEmptyPerson());
-      sum += 1;
-    }
-    return newPersons;
-  }
-  // sum > total -> trim from end
-  let newPersons = [...persons];
-  let currentSum = sum;
-  while (currentSum > total && newPersons.length > 1) {
-    const last = newPersons[newPersons.length - 1];
-    const lastKeys = parseInt(last.keysGiven, 10) || 1;
-    if (currentSum - lastKeys >= total) {
-      currentSum -= lastKeys;
-      newPersons.pop();
-    } else {
-      const excess = currentSum - total;
-      const newLastKeys = lastKeys - excess;
-      newPersons[newPersons.length - 1] = { ...last, keysGiven: Math.max(1, newLastKeys) };
-      currentSum = total;
-      break;
-    }
-  }
-  if (newPersons.length === 1 && currentSum > total) {
-    newPersons[0] = { ...newPersons[0], keysGiven: total };
-  }
-  return newPersons;
-};
+  let list = persons.map(p => ({
+    ...p,
+    keysGiven: Math.max(1, parseInt(p.keysGiven, 10) || 1)
+  }));
 
-const rebalanceAfterEdit = (state, editedIdx) => {
-  const total = parseInt(state.keyCount, 10) || 1;
-  // clamp edited value to not exceed remaining capacity
-  let prefixBefore = 0;
-  for (let i = 0; i < editedIdx; i++) prefixBefore += parseInt(state.handoverPersons[i]?.keysGiven, 10) || 1;
-  let edited = state.handoverPersons[editedIdx];
-  if (!edited) return;
-  let maxForEdited = total - prefixBefore;
-  if (maxForEdited < 1) maxForEdited = 1;
-  let curKeys = parseInt(edited.keysGiven, 10) || 1;
-  if (curKeys < 1) curKeys = 1;
-  if (curKeys > maxForEdited) {
-    curKeys = maxForEdited;
-    edited.keysGiven = curKeys;
-  }
-  const prefixIncluding = prefixBefore + curKeys;
-  let remaining = total - prefixIncluding;
-  if (remaining < 0) remaining = 0;
-  // trailing persons after editedIdx
-  let trailing = state.handoverPersons.slice(editedIdx + 1);
-  let trailingSum = sumKeys(trailing);
-  if (trailingSum === remaining) return;
-  if (trailingSum < remaining) {
-    // add needed persons
-    const toAdd = remaining - trailingSum;
-    for (let i = 0; i < toAdd; i++) {
-      state.handoverPersons.push(createEmptyPerson());
+  if (targetIndex !== null && targetIndex >= 0 && targetIndex < list.length) {
+    let keysBefore = 0;
+    for (let i = 0; i < targetIndex; i++) {
+      keysBefore += list[i].keysGiven;
+    }
+
+    const maxTargetKeys = Math.max(1, kCount - keysBefore);
+    list[targetIndex].keysGiven = Math.min(list[targetIndex].keysGiven, maxTargetKeys);
+
+    let remKeys = kCount - (keysBefore + list[targetIndex].keysGiven);
+    let i = targetIndex + 1;
+
+    while (remKeys > 0) {
+      if (i < list.length) {
+        const take = Math.min(list[i].keysGiven || 1, remKeys);
+        list[i].keysGiven = take;
+        remKeys -= take;
+        i++;
+      } else {
+        const newP = createEmptyPerson();
+        newP.keysGiven = 1;
+        list.push(newP);
+        remKeys -= 1;
+        i++;
+      }
+    }
+
+    if (i < list.length) {
+      list.splice(i);
     }
   } else {
-    // trailingSum > remaining -> trim trailing end until fits, adjusting last if needed
-    while (trailing.length > 0 && trailingSum > remaining) {
-      const last = trailing[trailing.length - 1];
-      const lastKeys = parseInt(last.keysGiven, 10) || 1;
-      if (trailingSum - lastKeys >= remaining) {
-        trailingSum -= lastKeys;
-        trailing.pop();
-        state.handoverPersons.pop();
+    let allocated = 0;
+    let keepCount = 0;
+
+    for (let i = 0; i < list.length; i++) {
+      if (allocated < kCount) {
+        const avail = kCount - allocated;
+        list[i].keysGiven = Math.min(list[i].keysGiven || 1, avail);
+        allocated += list[i].keysGiven;
+        keepCount = i + 1;
       } else {
-        const excess = trailingSum - remaining;
-        const newLastKeys = lastKeys - excess;
-        const stateLastIdx = state.handoverPersons.length - 1;
-        state.handoverPersons[stateLastIdx] = { ...state.handoverPersons[stateLastIdx], keysGiven: Math.max(1, newLastKeys) };
-        trailingSum = remaining;
         break;
       }
     }
+    list = list.slice(0, keepCount);
+
+    while (allocated < kCount) {
+      const newP = createEmptyPerson();
+      newP.keysGiven = 1;
+      list.push(newP);
+      allocated += 1;
+    }
   }
-  if (remaining === 0) {
-    // keep only up to editedIdx
-    state.handoverPersons = state.handoverPersons.slice(0, editedIdx + 1);
-  }
+
+  return list;
 };
 
 const initialState = {
@@ -245,26 +222,18 @@ export const wizardSlice = createSlice({
     },
     setKeyCount: (state, action) => {
       const val = action.payload;
-      let newCount;
       if (val === '') {
         state.keyCount = '';
         return;
-      } else {
-        newCount = Math.max(1, parseInt(val) || 1);
-        state.keyCount = newCount;
       }
-      // Rebalance persons so sum(keysGiven) === newCount, preserving distribution where possible
-      if (!state.handoverPersons || state.handoverPersons.length === 0) state.handoverPersons = [createEmptyPerson()];
-      // ensure each has keysGiven
-      state.handoverPersons.forEach(p => { if (!p.keysGiven || p.keysGiven < 1) p.keysGiven = 1; });
-      const rebalanced = rebalanceForTotal(state.handoverPersons, newCount);
-      state.handoverPersons = rebalanced;
-      // Keep legacy fields in sync with first person
+      const newCount = Math.max(1, parseInt(val, 10) || 1);
+      state.keyCount = newCount;
+      state.handoverPersons = rebalanceHandoverPersons(state.handoverPersons, newCount);
       if (state.handoverPersons[0]) {
-        state.handoverName = state.handoverPersons[0].name;
-        state.handoverRole = state.handoverPersons[0].role;
-        state.handoverContact = state.handoverPersons[0].contact;
-        state.handoverPersonId = state.handoverPersons[0].personId;
+        state.handoverName = state.handoverPersons[0].name || '';
+        state.handoverRole = state.handoverPersons[0].role || '';
+        state.handoverContact = state.handoverPersons[0].contact || '';
+        state.handoverPersonId = state.handoverPersons[0].personId || null;
       }
     },
     setPersonKeysGiven: (state, action) => {
@@ -273,10 +242,42 @@ export const wizardSlice = createSlice({
       let kg = parseInt(keysGiven, 10);
       if (isNaN(kg) || kg < 1) kg = 1;
       state.handoverPersons[index].keysGiven = kg;
-      rebalanceAfterEdit(state, index);
-      // sync legacy if first
-      if (index === 0 && state.handoverPersons[0]) {
-        state.handoverName = state.handoverPersons[0].name;
+      const kCount = Math.max(1, parseInt(state.keyCount, 10) || 1);
+      state.handoverPersons = rebalanceHandoverPersons(state.handoverPersons, kCount, index);
+      if (state.handoverPersons[0]) {
+        state.handoverName = state.handoverPersons[0].name || '';
+        state.handoverRole = state.handoverPersons[0].role || '';
+        state.handoverContact = state.handoverPersons[0].contact || '';
+        state.handoverPersonId = state.handoverPersons[0].personId || null;
+      }
+    },
+    addPerson: (state) => {
+      const kCount = Math.max(1, parseInt(state.keyCount, 10) || 1);
+      if (state.handoverPersons.length >= kCount) {
+        state.keyCount = kCount + 1;
+        state.handoverPersons.push(createEmptyPerson());
+      } else {
+        state.handoverPersons.push(createEmptyPerson());
+        state.handoverPersons = rebalanceHandoverPersons(state.handoverPersons, kCount);
+      }
+      if (state.handoverPersons[0]) {
+        state.handoverName = state.handoverPersons[0].name || '';
+        state.handoverRole = state.handoverPersons[0].role || '';
+        state.handoverContact = state.handoverPersons[0].contact || '';
+        state.handoverPersonId = state.handoverPersons[0].personId || null;
+      }
+    },
+    removePerson: (state, action) => {
+      const idx = action.payload;
+      if (state.handoverPersons.length <= 1) return; // keep at least one
+      state.handoverPersons.splice(idx, 1);
+      const kCount = Math.max(1, parseInt(state.keyCount, 10) || 1);
+      state.handoverPersons = rebalanceHandoverPersons(state.handoverPersons, kCount);
+      if (state.handoverPersons[0]) {
+        state.handoverName = state.handoverPersons[0].name || '';
+        state.handoverRole = state.handoverPersons[0].role || '';
+        state.handoverContact = state.handoverPersons[0].contact || '';
+        state.handoverPersonId = state.handoverPersons[0].personId || null;
       }
     },
     setHandoverDetails: (state, action) => {
@@ -334,10 +335,7 @@ export const wizardSlice = createSlice({
           photoIsReused: !!p.photoIsReused || (typeof p.photo === 'string' && p.photo.startsWith('http')),
           keysGiven: parseInt(p.keysGiven, 10) >= 1 ? parseInt(p.keysGiven, 10) : 1,
         }));
-        // Ensure sum(keysGiven) === keyCount via rebalance
-        const kc = parseInt(state.keyCount) || 1;
-        state.handoverPersons.forEach(p => { if (!p.keysGiven || p.keysGiven < 1) p.keysGiven = 1; });
-        state.handoverPersons = rebalanceForTotal(state.handoverPersons, kc);
+        state.handoverPersons = rebalanceHandoverPersons(state.handoverPersons, state.keyCount);
         if (state.handoverPersons[0]) {
           state.handoverName = state.handoverPersons[0].name;
           state.handoverRole = state.handoverPersons[0].role;
@@ -391,9 +389,6 @@ export const wizardSlice = createSlice({
           photoIsReused: !!pickUrl(p.photo),
           keysGiven: parseInt(p.keysGiven, 10) >= 1 ? parseInt(p.keysGiven, 10) : 1,
         }));
-        // ensure sum matches keyCount
-        const kc = parseInt(state.keyCount) || sumKeys(state.handoverPersons);
-        state.handoverPersons = rebalanceForTotal(state.handoverPersons, kc);
       } else if (rec.handoverPerson?.name) {
         state.handoverPersons = [{
           name: rec.handoverPerson.name || '',
@@ -408,6 +403,8 @@ export const wizardSlice = createSlice({
       } else {
         state.handoverPersons = [createEmptyPerson()];
       }
+      state.handoverPersons = rebalanceHandoverPersons(state.handoverPersons, state.keyCount);
+
       state.metadata = {
         lockPhoto: rec.lockPhoto ? { timestamp: rec.lockPhoto.uploadedAt || rec.createdAt, geolocation: null, reused: true } : null,
         keyPhoto: rec.keyPhoto ? { timestamp: rec.keyPhoto.uploadedAt || rec.createdAt, geolocation: null, reused: true } : null,
@@ -452,6 +449,8 @@ export const {
   hydrateFromRecord,
   setEditingId,
   setPersonKeysGiven,
+  addPerson,
+  removePerson,
 } = wizardSlice.actions;
 
 export const selectWizard = (state) => state.wizard;

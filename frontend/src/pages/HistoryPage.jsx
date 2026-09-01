@@ -5,6 +5,8 @@ import { fetchRecords, deleteRecord, updateRecord, updateHandoverPhoto, updatePl
 import { selectCurrentUser } from '../features/auth/authSlice';
 import { Calendar, Search, Key, ChevronDown, ChevronUp, Clock, Briefcase, Trash2, AlertCircle, Filter, RefreshCw, ImagePlus, Pencil, Save, X, User, Users } from 'lucide-react';
 
+import { filterHandoverPersonsForDisplay } from '../utils/validators';
+
 const formatDateTime = (iso) => {
   if (!iso) return '—';
   try { const d = new Date(iso); return `${d.toLocaleDateString()} ${d.toLocaleTimeString()}`; } catch { return String(iso); }
@@ -20,10 +22,14 @@ const normalizeRecord = (rec) => {
   const handoverPhoto = pickUrl(rec.handoverPhoto);
   const placementAt = rec.placementAt || pickUploadedAt(rec.placementPhoto) || null;
   const handoverAt = rec.handoverAt || pickUploadedAt(rec.handoverPhoto) || rec.createdAt;
-  const handoverPersons = Array.isArray(rec.handoverPersons) ? rec.handoverPersons.map(p=>({
-    name: p.name || '', role: p.role || '', contactNumber: p.contactNumber || p.contact || '', personId: p.personId || null, status: p.status || 'active', photo: pickUrl(p.photo), keysGiven: parseInt(p.keysGiven,10) >=1 ? parseInt(p.keysGiven,10) :1,
-  })) : [];
-  return { ...rec, id, _id: id, handoverName: rec.handoverPerson?.name || rec.handoverName || rec.handoverPersons?.[0]?.name || 'Unknown', handoverRole: rec.handoverPerson?.role || rec.handoverRole || '', handoverContact: rec.handoverPerson?.contactNumber || rec.handoverContact || '', keyCount: rec.keyCount ?? 1, lockPhoto, keyPhoto, placementPhoto, handoverPhoto, handoverAt, placementAt, handoverPersons, status: rec.status || 'active' };
+  const keyCountNum = parseInt(rec.keyCount, 10) || 1;
+  const rawPersons = Array.isArray(rec.handoverPersons) && rec.handoverPersons.length > 0
+    ? rec.handoverPersons.map(p=>({
+        name: p.name || '', role: p.role || '', contactNumber: p.contactNumber || p.contact || '', personId: p.personId || null, status: p.status || 'active', photo: pickUrl(p.photo), keysGiven: parseInt(p.keysGiven,10) >=1 ? parseInt(p.keysGiven,10) :1,
+      }))
+    : (rec.handoverPerson?.name ? [{ name: rec.handoverPerson.name, role: rec.handoverPerson.role || '', contactNumber: rec.handoverPerson.contactNumber || '', personId: null, status: 'active', photo: handoverPhoto, keysGiven: keyCountNum }] : []);
+  const handoverPersons = filterHandoverPersonsForDisplay(rawPersons, keyCountNum);
+  return { ...rec, id, _id: id, handoverName: handoverPersons[0]?.name || rec.handoverPerson?.name || rec.handoverName || 'Unknown', handoverRole: handoverPersons[0]?.role || rec.handoverPerson?.role || rec.handoverRole || '', handoverContact: handoverPersons[0]?.contactNumber || rec.handoverPerson?.contactNumber || rec.handoverContact || '', keyCount: keyCountNum, lockPhoto, keyPhoto, placementPhoto, handoverPhoto, handoverAt, placementAt, handoverPersons, status: rec.status || 'active' };
 };
 
 export default function HistoryPage() {

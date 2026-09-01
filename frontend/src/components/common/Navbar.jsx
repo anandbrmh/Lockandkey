@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useSelector, useDispatch } from 'react-redux';
-import { KeyRound, History, PlusCircle, Home, Menu, X, LogOut, LogIn, UserPlus } from 'lucide-react';
+import { KeyRound, History, PlusCircle, Home, Menu, X, LogOut, LogIn, UserPlus, Users, Shield } from 'lucide-react';
 import { selectIsAuthenticated, selectCurrentUser, logout } from '../../features/auth/authSlice';
 import { resetWizard } from '../../features/wizard/wizardSlice';
 
@@ -27,7 +27,10 @@ export default function Navbar() {
   const navItems = [
     { to: '/', label: 'Home', icon: Home },
     { to: '/wizard', label: 'New', icon: PlusCircle },
-    { to: '/history', label: 'History', icon: History },
+    // { to: '/history', label: 'History', icon: History },
+    { to: '/staff-directory', label: 'Staff', icon: Users },
+    { to: '/locks-directory', label: 'Locks', icon: Shield },
+    ...(currentUser?.role === 'staff' ? [{ to: '/staff/complete', label: 'Profile', icon: UserPlus }] : []),
   ];
 
   const linkCls = ({ isActive }) =>
