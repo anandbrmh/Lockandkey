@@ -4,45 +4,137 @@
 
 @layer base {
   body {
-    @apply font-sans bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-50 transition-colors duration-300;
+    @apply font-mono bg-paper text-ink relative;
+    background-image:
+      linear-gradient(to right, #e5e7eb 1px, transparent 1px),
+      linear-gradient(to bottom, #e5e7eb 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+  .dark body {
+    background-image:
+      linear-gradient(to right, #1f2937 1px, transparent 1px),
+      linear-gradient(to bottom, #1f2937 1px, transparent 1px);
+  }
+  /* hand-drawn headings */
+  h1, h2, h3 {
+    @apply font-display tracking-tight;
   }
 }
 
-/* Glassmorphism card styles */
-.glass-panel {
-  background: rgba(255, 255, 255, 0.7);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.3);
+/* ── WIREFRAME TOKENS ── */
+@layer components {
+  /* paper card with hard border + sketch shadow */
+  .wire-card {
+    @apply bg-white border-2 border-ink rounded-none relative;
+    box-shadow: 4px 4px 0 0 #111111;
+  }
+  .dark .wire-card {
+    @apply bg-zinc-900 border-white;
+    box-shadow: 4px 4px 0 0 #ffffff;
+  }
+  .wire-card-dashed {
+    @apply bg-white border-2 border-dashed border-ink rounded-none;
+    box-shadow: 3px 3px 0 0 #111;
+  }
+  .dark .wire-card-dashed {
+    @apply bg-zinc-900 border-white;
+  }
+
+  /* wireframe button */
+  .wire-btn {
+    @apply inline-flex items-center justify-center gap-2 px-5 py-3 bg-white border-2 border-ink text-ink font-mono font-bold text-sm uppercase tracking-widest rounded-none transition-none;
+    box-shadow: 3px 3px 0 0 #111;
+  }
+  .wire-btn:hover {
+    @apply bg-ink text-white translate-x-[1px] translate-y-[1px];
+    box-shadow: 2px 2px 0 0 #111;
+  }
+  .wire-btn:active {
+    @apply translate-x-[3px] translate-y-[3px];
+    box-shadow: none;
+  }
+  .wire-btn:disabled {
+    @apply opacity-40 cursor-not-allowed;
+  }
+  .wire-btn-primary {
+    @apply bg-ink text-white;
+  }
+  .wire-btn-primary:hover {
+    @apply bg-white text-ink;
+  }
+  .dark .wire-btn {
+    @apply bg-zinc-900 border-white text-white;
+    box-shadow: 3px 3px 0 0 #fff;
+  }
+  .dark .wire-btn:hover {
+    @apply bg-white text-ink;
+  }
+
+  /* wire input */
+  .wire-input {
+    @apply w-full px-4 py-3 bg-white border-2 border-ink rounded-none font-mono text-sm placeholder:text-zinc-400 focus:outline-none focus:bg-yellow-50;
+    box-shadow: 2px 2px 0 0 #111;
+  }
+  .dark .wire-input {
+    @apply bg-zinc-900 border-white text-white placeholder:text-zinc-500 focus:bg-zinc-800;
+    box-shadow: 2px 2px 0 0 #fff;
+  }
+
+  /* placeholder image box with X */
+  .wire-placeholder {
+    @apply relative bg-zinc-100 border-2 border-ink flex items-center justify-center overflow-hidden;
+    background-image:
+      linear-gradient(to top right, transparent calc(50% - 1px), #111 50%, transparent calc(50% + 1px)),
+      linear-gradient(to top left, transparent calc(50% - 1px), #111 50%, transparent calc(50% + 1px));
+  }
+  .dark .wire-placeholder {
+    @apply bg-zinc-800 border-white;
+    background-image:
+      linear-gradient(to top right, transparent calc(50% - 1px), #fff 50%, transparent calc(50% + 1px)),
+      linear-gradient(to top left, transparent calc(50% - 1px), #fff 50%, transparent calc(50% + 1px));
+  }
+
+  /* annotation label */
+  .wire-label {
+    @apply font-mono text-[11px] font-bold uppercase tracking-[0.14em] text-ink flex items-center gap-1.5;
+  }
+  .wire-annotation {
+    @apply absolute -top-2 -left-2 bg-ink text-white text-[10px] font-mono font-bold px-2 py-0.5 border border-ink rotate-[-1deg];
+  }
+  .dark .wire-annotation {
+    @apply bg-white text-ink border-white;
+  }
+
+  /* sketch underline */
+  .wire-underline {
+    @apply relative inline-block;
+  }
+  .wire-underline::after {
+    content: "";
+    @apply absolute left-0 -bottom-1 w-full h-2 bg-yellow-200 -rotate-1 -z-10 opacity-60;
+  }
+
+  /* keep old glass-panel for compat but wire it */
+  .glass-panel {
+    @apply wire-card;
+  }
 }
 
-.dark .glass-panel {
-  background: rgba(15, 23, 42, 0.6);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+/* keep legacy dashed but wire */
+.dashed-dropzone, .dashed-dropzone-active {
+  @apply wire-card-dashed;
+  background-image: none !important;
+}
+.dark .dashed-dropzone, .dark .dashed-dropzone-active {
+  background-image: none !important;
 }
 
-/* Custom styles for stepper and camera */
-.shutter-btn {
-  box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.3), 0 0 15px rgba(0, 0, 0, 0.2);
+/* tape strip */
+.wire-tape {
+  @apply absolute -top-3 left-1/2 -translate-x-1/2 w-16 h-6 bg-yellow-200 border border-yellow-300 rotate-[-2deg] opacity-70;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
 }
 
-/* Drag & Drop dynamic border pattern */
-.dashed-dropzone {
-  background-image: url("data:image/svg+xml,%3csvg width='100%25' height='100%25' xmlns='http://www.w3.org/2000/svg'%3e%3crect width='100%25' height='100%25' fill='none' rx='16' ry='16' stroke='%23b77a33ff' stroke-width='2' stroke-dasharray='8%2c 8' stroke-dashoffset='0' stroke-linecap='square'/%3e%3c/svg%3e");
-  border-radius: 16px;
-}
-
-.dashed-dropzone-active {
-  background-image: url("data:image/svg+xml,%3csvg width='100%25' height='100%25' xmlns='http://www.w3.org/2000/svg'%3e%3crect width='100%25' height='100%25' fill='none' rx='16' ry='16' stroke='%2310b981ff' stroke-width='3' stroke-dasharray='12%2c 6' stroke-dashoffset='0' stroke-linecap='square'/%3e%3c/svg%3e");
-  border-radius: 16px;
-}
-
-.dark .dashed-dropzone {
-  background-image: url("data:image/svg+xml,%3csvg width='100%25' height='100%25' xmlns='http://www.w3.org/2000/svg'%3e%3crect width='100%25' height='100%25' fill='none' rx='16' ry='16' stroke='%23cb9a56ff' stroke-width='2' stroke-dasharray='8%2c 8' stroke-dashoffset='0' stroke-linecap='square'/%3e%3c/svg%3e");
-}
-
-.dark .dashed-dropzone-active {
-  background-image: url("data:image/svg+xml,%3csvg width='100%25' height='100%25' xmlns='http://www.w3.org/2000/svg'%3e%3crect width='100%25' height='100%25' fill='none' rx='16' ry='16' stroke='%2334d399ff' stroke-width='3' stroke-dasharray='12%2c 6' stroke-dashoffset='0' stroke-linecap='square'/%3e%3c/svg%3e");
-}
+/* wobbly */
+.wire-wobble { transform: rotate(-0.4deg); }
+.wire-wobble:nth-child(even) { transform: rotate(0.6deg); }
