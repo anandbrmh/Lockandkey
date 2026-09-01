@@ -23,8 +23,7 @@ userSchema.methods.comparePassword = async function (plain) {
   return bcrypt.compare(plain, this.passwordHash);
 };
 
-// Ensure email uniqueness index
-userSchema.index({ email: 1 });
+// Unique index already defined via `unique: true` on email field — no duplicate index needed
 
 const User = mongoose.model("User", userSchema);
 export default User;

@@ -24,6 +24,21 @@ const errorHandler = (err, req, res, _next) => {
     statusCode = 400;
   }
 
+  // Duplicate key (unique index) -> 409 Conflict
+  if (err.code === 11000 || err.code === 11001) {
+    statusCode = 409;
+    const field = Object.keys(err.keyValue || err.keyPattern || {})[0] || "field";
+    const value = err.keyValue ? err.keyValue[field] : "";
+    if (field === "email") {
+      message = "Email already registered";
+    } else if (field === "nameLower") {
+      message = "Person with this name already exists";
+    } else {
+      message = `${field} already exists${value ? `: ${value}` : ""}`;
+    }
+    return res.status(statusCode).json({ success: false, message });
+  }
+
   console.error(`[Error] ${req.method} ${req.originalUrl} -> ${message}`, err.stack?.split("\n")[1]?.trim() || "");
 
   res.status(statusCode).json({

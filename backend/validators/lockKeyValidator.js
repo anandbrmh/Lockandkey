@@ -70,7 +70,7 @@ export const validateUpdateRecord = [
 
 export const validateRegister = [
   body("name").notEmpty().withMessage("name is required").trim(),
-  body("email").isEmail().withMessage("valid email required").normalizeEmail(),
+  body("email").trim().isEmail().withMessage("valid email required").normalizeEmail(),
   body("password").isLength({ min: 6 }).withMessage("password must be at least 6 chars"),
   body("role").optional().isIn(["admin", "staff"]).withMessage("role must be admin or staff"),
   (req, res, next) => {
@@ -83,7 +83,7 @@ export const validateRegister = [
 ];
 
 export const validateLogin = [
-  body("email").isEmail().withMessage("valid email required").normalizeEmail(),
+  body("email").trim().isEmail().withMessage("valid email required").normalizeEmail(),
   body("password").notEmpty().withMessage("password is required"),
   (req, res, next) => {
     const errors = validationResult(req);
