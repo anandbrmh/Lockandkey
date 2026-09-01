@@ -36,6 +36,7 @@ const lockKeyRecordSchema = new mongoose.Schema(
           enum: ["active", "inactive", "returned", "lost"],
           default: "active",
         },
+        keysGiven: { type: Number, default: 1, min: 1 },
       }
     ],
     location: {

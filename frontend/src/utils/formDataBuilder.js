@@ -42,6 +42,7 @@ export const buildRecordFormData = (wizardState) => {
         contactNumber: p.contact || '',
         personId: p.personId || null,
         status: p.status || 'active',
+        keysGiven: parseInt(p.keysGiven, 10) >= 1 ? parseInt(p.keysGiven, 10) : 1,
       };
       // If photo is reused http URL, include it so backend can keep reference without re-upload
       if (p.photo && typeof p.photo === 'string' && p.photo.startsWith('http')) {

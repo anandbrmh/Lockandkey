@@ -1,243 +1,42 @@
-import React, { useEffect, useRef } from 'react';
+import React from 'react';
 import { useSelector } from 'react-redux';
 import { selectWizard } from '../../features/wizard/wizardSlice';
-import { gsap } from 'gsap';
-import { Calendar, User, Briefcase, Phone, Hash, Key, CheckSquare, Users, Image as ImageIcon, AlertCircle, ShieldCheck } from 'lucide-react';
+import { Key, AlertCircle } from 'lucide-react';
 
 export default function ReviewSubmit({ onSubmit, isSubmitting, isEditing }) {
   const wizardState = useSelector(selectWizard);
-  const containerRef = useRef(null);
-
-  const {
-    lockPhoto,
-    keyPhoto,
-    keyCount,
-    placementPhoto,
-    handoverPhoto,
-    handoverPersons,
-    handoverName,
-    handoverRole,
-    handoverContact,
-    metadata
-  } = wizardState;
-
+  const { lockPhoto, keyPhoto, keyCount, placementPhoto, handoverPersons, handoverName, handoverRole, handoverContact, metadata } = wizardState;
   const keyCountNum = parseInt(keyCount) || 1;
-  // Build display list for multiple persons; fallback to legacy single fields
-  const rawPersons = Array.isArray(handoverPersons) && handoverPersons.length > 0
-    ? handoverPersons
-    : [{ name: handoverName, role: handoverRole, contact: handoverContact, personId: null }];
-  const personsForDisplay = rawPersons.length === keyCountNum
-    ? rawPersons
-    : Array.from({ length: keyCountNum }, (_, i) => rawPersons[i] || { name: '', role: '', contact: '', personId: null });
-
-  useEffect(() => {
-    // GSAP staggered reveal on review panels
-    if (containerRef.current) {
-      const items = containerRef.current.querySelectorAll('.reveal-item');
-      gsap.fromTo(
-        items,
-        { opacity: 0, y: 25 },
-        { opacity: 1, y: 0, duration: 0.5, stagger: 0.1, ease: 'power2.out' }
-      );
-    }
-  }, []);
-
-  const photos = [
-    { label: 'Lock Photo', src: lockPhoto, meta: metadata.lockPhoto },
-    { label: `Key Photo (${keyCountNum} ${keyCountNum === 1 ? 'key' : 'keys'})`, src: keyPhoto, meta: metadata.keyPhoto },
-    { label: 'Placement Photo', src: placementPhoto, meta: metadata.placementPhoto },
-  ];
-  const hasAnyMissing = !lockPhoto || !keyPhoto || !placementPhoto || personsForDisplay.some(p=>!p.photo);
+  const rawPersons = Array.isArray(handoverPersons) && handoverPersons.length ? handoverPersons : [{ name: handoverName, role: handoverRole, contact: handoverContact, keysGiven: keyCountNum, photo: null, status:'active' }];
+  const personsForDisplay = rawPersons;
+  const sumGiven = personsForDisplay.reduce((s,p)=>s+(parseInt(p.keysGiven,10)||1),0);
+  const photos = [{ label: 'Lock', src: lockPhoto }, { label: `Key (${keyCountNum})`, src: keyPhoto }, { label: 'Placement', src: placementPhoto }];
+  const hasMissing = !lockPhoto || !keyPhoto || !placementPhoto || personsForDisplay.some(p=>!p.photo) || sumGiven !== keyCountNum;
 
   return (
-    <div ref={containerRef} className="space-y-8">
-      {/* Title */}
-      <div className="text-center md:text-left reveal-item">
-        <h2 className="text-xl font-bold tracking-tight text-slate-800 dark:text-slate-100 sm:text-2xl">
-          Review & Submit Record
-        </h2>
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mt-1">
-          <p className="text-sm text-slate-500 dark:text-slate-400">
-            Please confirm all details are correct before saving to the system.
-          </p>
-          <div className="self-start sm:self-auto inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary-100 dark:bg-primary-950/60 text-primary-800 dark:text-primary-350 font-bold text-xs border border-primary-200 dark:border-primary-900/30">
-            <Key className="h-3.5 w-3.5 text-primary-600 dark:text-primary-400" />
-            <span>Total Handovers: {keyCountNum} {keyCountNum === 1 ? 'Key' : 'Keys'}</span>
-          </div>
-        </div>
+    <div className="space-y-4">
+      <div>
+        <h2 className="text-sm font-semibold">Review</h2>
+        <p className="text-xs font-mono text-zinc-500">Confirm before saving.</p>
       </div>
-
-      {/* Grid of Photos */}
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 reveal-item">
-        {photos.map((photo, index) => (
-          <div
-            key={index}
-            className="group relative overflow-hidden rounded-2xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col"
-          >
-            <div className="aspect-video w-full overflow-hidden bg-slate-900 relative">
-              {photo.src ? (
-                <>
-                  <img
-                    src={photo.src}
-                    alt={photo.label}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    onError={(e) => { e.currentTarget.style.display = 'none'; const fb = e.currentTarget.nextElementSibling; if (fb) fb.style.display = 'flex'; }}
-                  />
-                  <div className="hidden absolute inset-0 flex-col items-center justify-center bg-slate-100 dark:bg-slate-800 text-slate-500 p-4 text-center gap-1" style={{ display: 'none' }}>
-                    <ImageIcon className="h-6 w-6 opacity-40" />
-                    <span className="text-[11px] font-semibold">Image unavailable</span>
-                    <span className="text-[10px] text-slate-400">Please re-upload</span>
-                  </div>
-                </>
-              ) : (
-                <div className="flex flex-col items-center justify-center h-full text-slate-500 gap-1 p-6">
-                  <ImageIcon className="h-6 w-6 opacity-40" />
-                  <span className="text-xs">{photo.label} — Missing (can add later)</span>
-                  <span className="text-[10px] text-amber-600">Draft: update later from History</span>
-                </div>
-              )}
-            </div>
-            <div className="p-3">
-              <h4 className="text-xs font-bold text-slate-700 dark:text-slate-300 truncate">{photo.label}</h4>
-              <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1 flex items-center gap-1">
-                <Calendar className="h-3 w-3 shrink-0" />
-                {photo.meta?.timestamp ? new Date(photo.meta.timestamp).toLocaleTimeString() : photo.src ? 'Captured' : 'Not yet'}
-              </p>
-            </div>
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        {photos.map((p,i)=>(
+          <div key={i} className="border border-zinc-200 rounded-md overflow-hidden bg-white">
+            <div className="aspect-video bg-zinc-50 flex items-center justify-center overflow-hidden">{p.src ? <img src={p.src} alt="" className="w-full h-full object-cover" /> : <span className="text-xs font-mono text-zinc-400">missing</span>}</div>
+            <div className="p-2 text-xs font-mono">{p.label}</div>
           </div>
         ))}
-        {/* Per-person photos */}
-        {personsForDisplay.map((person, idx)=> (
-          <div key={`person-photo-${idx}`} className="group relative overflow-hidden rounded-2xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col">
-            <div className="aspect-video w-full overflow-hidden bg-slate-900 relative">
-              {person.photo ? (
-                <img src={person.photo} alt={`Person ${idx+1}`} className="w-full h-full object-cover" onError={(e)=>{ e.currentTarget.style.display='none'; }} />
-              ) : (
-                <div className="flex flex-col items-center justify-center h-full text-slate-500 gap-1 p-4 text-center">
-                  <ImageIcon className="h-6 w-6 opacity-40" />
-                  <span className="text-xs font-semibold">Person {idx+1} Photo — Missing</span>
-                  <span className="text-[10px] text-amber-600">Can be added later</span>
-                </div>
-              )}
-              <div className={`absolute top-2 left-2 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase border ${ (person.status||'active')==='active'?'bg-emerald-600 text-white border-emerald-700': (person.status==='inactive'?'bg-slate-600 text-white': person.status==='returned'?'bg-blue-600 text-white':'bg-red-600 text-white')}`}>{person.status||'active'}</div>
-            </div>
-            <div className="p-3">
-              <h4 className="text-xs font-bold text-slate-700 dark:text-slate-300 truncate">Person {idx+1} — {person.name || 'Unnamed'}</h4>
-              <p className="text-[10px] text-slate-400 truncate">{person.role || 'No role'} • {person.status||'active'}</p>
-            </div>
+        {personsForDisplay.map((p,idx)=>(
+          <div key={idx} className="border border-zinc-200 rounded-md overflow-hidden bg-white">
+            <div className="aspect-video bg-zinc-50 flex items-center justify-center overflow-hidden relative">{p.photo ? <img src={p.photo} alt="" className="w-full h-full object-cover" /> : <span className="text-xs font-mono text-zinc-400">no photo</span>}<span className="absolute top-1 left-1 bg-zinc-900 text-white text-[10px] px-1.5 py-0.5 rounded">{p.keysGiven||1} key{(p.keysGiven||1)>1?'s':''}</span></div>
+            <div className="p-2"><p className="text-xs font-medium truncate">{p.name || 'Unnamed'}</p><p className="text-[11px] font-mono text-zinc-500 truncate">{p.role || '—'} · {p.status} · {p.keysGiven||1} keys</p></div>
           </div>
         ))}
       </div>
-      {hasAnyMissing && (
-        <div className="flex items-center gap-2 p-3 bg-amber-50 dark:bg-amber-950/20 text-amber-700 dark:text-amber-300 rounded-xl text-xs border border-amber-100 dark:border-amber-900/30 reveal-item">
-          <AlertCircle className="h-4 w-4 shrink-0" /> Draft save allowed with only Lock Photo. Missing photos/steps can be updated later from History → Expand & Edit.
-        </div>
-      )}
-
-      {/* Info Details Section */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Handover Details - Multiple Persons */}
-        <div className="reveal-item p-6 rounded-2xl bg-white dark:bg-slate-900/60 border border-slate-250/60 dark:border-slate-800/80 shadow-sm space-y-4">
-          <h3 className="text-sm font-bold tracking-wider text-slate-400 dark:text-slate-500 uppercase flex items-center gap-2">
-            {personsForDisplay.length > 1 ? <Users className="h-4 w-4 text-primary-600 dark:text-primary-400" /> : <User className="h-4.5 w-4.5 text-primary-600 dark:text-primary-400" />}
-            <span>{personsForDisplay.length > 1 ? `Handover Persons (${personsForDisplay.length})` : 'Handover Person'}</span>
-          </h3>
-
-          <div className="space-y-4 max-h-[360px] overflow-y-auto pr-1">
-            {personsForDisplay.map((person, idx) => (
-              <div key={idx} className={`space-y-3 ${idx !== personsForDisplay.length - 1 ? 'pb-4 border-b border-slate-100 dark:border-slate-800/60' : ''}`}>
-                <div className="flex items-center gap-2">
-                  <span className="h-6 w-6 rounded-lg bg-primary-100 dark:bg-primary-900/40 text-primary-700 dark:text-primary-300 flex items-center justify-center text-xs font-bold">{idx + 1}</span>
-                  <span className="text-xs font-black tracking-wider uppercase text-slate-600 dark:text-slate-400">Person {idx + 1} {keyCountNum > 1 && <span className="normal-case font-semibold text-slate-400">— Key {idx + 1}</span>}</span>
-                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase border ${ (person.status||'active')==='active'?'bg-emerald-50 text-emerald-700 border-emerald-200': (person.status==='inactive'?'bg-slate-100 text-slate-600 border-slate-200': (person.status==='returned'?'bg-blue-50 text-blue-700 border-blue-200':'bg-red-50 text-red-700 border-red-200'))}`}>{person.status||'active'}</span>
-                  {person.personId && <span className="ml-auto text-[10px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/30 px-2 py-0.5 rounded-full border border-emerald-100 dark:border-emerald-900/30">Reused ✓</span>}
-                </div>
-                {person.photo && (
-                  <div className="h-16 w-16 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800 bg-slate-100">
-                    <img src={person.photo} alt={`Person ${idx+1}`} className="h-full w-full object-cover" />
-                  </div>
-                )}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 flex items-center gap-1.5"><CheckSquare className="h-3.5 w-3.5" /> Name</span>
-                    <span className="text-sm font-bold text-slate-800 dark:text-slate-100 truncate max-w-[60%] text-right">{person.name || <span className="italic text-slate-400">Not provided — can add later</span>}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 flex items-center gap-1.5"><Briefcase className="h-3.5 w-3.5" /> Designation</span>
-                    <span className="text-sm font-semibold text-slate-800 dark:text-slate-100 truncate max-w-[60%] text-right">{person.role || <span className="italic text-slate-400">Not provided</span>}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 flex items-center gap-1.5"><Phone className="h-3.5 w-3.5" /> Contact</span>
-                    <span className="text-sm font-semibold text-slate-800 dark:text-slate-100 truncate max-w-[60%] text-right">{person.contact || <span className="italic text-slate-400">Not Provided</span>}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 flex items-center gap-1.5"><ShieldCheck className="h-3.5 w-3.5" /> Key Status</span>
-                    <span className="text-xs font-bold uppercase px-2 py-0.5 rounded-full border bg-white dark:bg-slate-800">{person.status||'active'}</span>
-                  </div>
-                  {!person.photo && <p className="text-[11px] text-amber-600 bg-amber-50 dark:bg-amber-950/20 px-2 py-1 rounded-lg">Photo missing — can be added later via History edit</p>}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Lock State Details */}
-        <div className="reveal-item p-6 rounded-2xl bg-white dark:bg-slate-900/60 border border-slate-250/60 dark:border-slate-800/80 shadow-sm space-y-4">
-          <h3 className="text-sm font-bold tracking-wider text-slate-400 dark:text-slate-500 uppercase flex items-center gap-2">
-            <Key className="h-4.5 w-4.5 text-primary-600 dark:text-primary-400" />
-            <span>Key Records</span>
-          </h3>
-
-          <div className="space-y-3.5">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800/60">
-              <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
-                <Hash className="h-3.5 w-3.5" /> Handed Over
-              </span>
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary-50 dark:bg-primary-950/60 text-primary-600 dark:text-primary-400 font-extrabold text-sm border border-primary-100 dark:border-primary-900/30">
-                {keyCountNum} {keyCountNum === 1 ? 'Key' : 'Keys'}
-              </span>
-            </div>
-
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800/60">
-              <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Log Timestamp</span>
-              <span className="text-xs font-medium text-slate-600 dark:text-slate-350">
-                {new Date().toLocaleDateString()} {new Date().toLocaleTimeString()}
-              </span>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Status</span>
-              <span className="inline-flex items-center gap-1 text-[10px] uppercase font-bold tracking-wide text-amber-500">
-                <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
-                Awaiting Upload
-              </span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Submit Button */}
-      <div className="reveal-item pt-4 flex flex-col sm:flex-row gap-2 justify-end">
-        <p className="text-[11px] text-slate-500 dark:text-slate-400 mr-auto self-center">You can save with only Lock Photo and complete Key / Placement / Person photos later from History → Expand & Edit. Each key has its own photo + status (<span className="font-mono font-bold">active/inactive/returned/lost</span>).</p>
-        <button
-          type="button"
-          onClick={onSubmit}
-          disabled={isSubmitting || !lockPhoto}
-          title={!lockPhoto ? 'Lock Photo required' : hasAnyMissing ? 'Save draft — incomplete steps can be updated later' : 'All steps complete'}
-          className="w-full sm:w-auto min-w-[220px] flex items-center justify-center gap-2 bg-gradient-to-tr from-emerald-600 to-teal-500 hover:from-emerald-700 hover:to-teal-650 text-white font-bold py-3.5 px-8 rounded-xl shadow-lg shadow-emerald-500/10 hover:shadow-emerald-500/20 transition-all hover:scale-[1.02] active:scale-98 disabled:opacity-50 disabled:scale-100"
-        >
-          {isSubmitting ? (
-            <>
-              <div className="h-5 w-5 border-2 border-t-transparent border-white rounded-full animate-spin" />
-              <span>{isEditing ? 'Updating...' : 'Saving...'}</span>
-            </>
-          ) : isEditing ? (
-            <span>{hasAnyMissing ? 'Update Draft (Complete Later Again)' : 'Update Record in Vault'}</span>
-          ) : hasAnyMissing ? (
-            <span>Save Draft to Vault (Complete Later)</span>
-          ) : (
-            <span>Submit to Vault</span>
-          )}
+      {hasMissing && <div className="border border-zinc-200 bg-zinc-50 text-zinc-600 px-3 py-2 rounded-md text-xs flex items-center gap-2"><AlertCircle className="h-3.5 w-3.5" /> {sumGiven !== keyCountNum ? `Allocated ${sumGiven}/${keyCountNum} keys — adjust per-person keys.` : 'Draft can be saved with only lock photo.'}</div>}
+      <div className="flex justify-end">
+        <button onClick={onSubmit} disabled={isSubmitting || !lockPhoto} className="wire-btn wire-btn-primary disabled:opacity-40">
+          {isSubmitting ? 'Saving...' : isEditing ? 'Update' : hasMissing ? 'Save draft' : 'Submit'} <Key className="h-3.5 w-3.5" />
         </button>
       </div>
     </div>

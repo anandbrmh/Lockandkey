@@ -14,15 +14,14 @@ export const validateStep = (stepIndex, wizardState) => {
     case 2: // Lock Placement Photo — optional for draft, but required for sequential progression
       return !!wizardState.placementPhoto;
 
-    case 3: { // Handover Persons — each person needs name/role and individual photo (per-key image requirement)
-      const count = parseInt(wizardState.keyCount) || 1;
+    case 3: { // Handover Persons — sum(keysGiven) must equal keyCount, plus each needs name/role/photo
+      const total = parseInt(wizardState.keyCount) || 1;
       const persons = wizardState.handoverPersons || [];
-      if (persons.length !== count) return false;
-      // For strict step validation, require name/role; photo per person is required for final submit but allow draft without photo?
-      // We enforce per-person photo here for sequential flow — user must upload each key person's image
+      const sum = persons.reduce((s, p) => s + (parseInt(p.keysGiven, 10) || 1), 0);
+      if (sum !== total) return false;
+      if (persons.some(p => (parseInt(p.keysGiven, 10) || 1) < 1)) return false;
       const hasNames = persons.every(p => p.name?.trim() && p.role?.trim());
       if (!hasNames) return false;
-      // Check each person has photo (either data URL or reused http)
       const allPhotos = persons.every(p => !!p.photo);
       return allPhotos;
     }
@@ -44,7 +43,8 @@ export const canSaveDraft = (wizardState) => !!wizardState.lockPhoto;
 export const isFullyComplete = (wizardState) => {
   const kc = parseInt(wizardState.keyCount) || 0;
   const persons = wizardState.handoverPersons || [];
-  const personsValid = persons.length === kc && persons.every(p => p.name?.trim() && p.role?.trim() && !!p.photo && ["active","inactive","returned","lost"].includes(p.status || "active"));
+  const sum = persons.reduce((s, p) => s + (parseInt(p.keysGiven, 10) || 1), 0);
+  const personsValid = sum === kc && persons.every(p => p.name?.trim() && p.role?.trim() && !!p.photo && ["active","inactive","returned","lost"].includes(p.status || "active") && (parseInt(p.keysGiven,10)||1) >= 1);
   return (
     !!wizardState.lockPhoto &&
     !!wizardState.keyPhoto &&

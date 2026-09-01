@@ -79,10 +79,10 @@ const AnimatedRoutes = () => {
 export default function AppRouter() {
   return (
     <BrowserRouter>
-      <div className="flex flex-col min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-50 transition-colors duration-300">
+      <div className="flex flex-col min-h-screen bg-white text-zinc-900">
         <Navbar />
-        {/* bottom padding on mobile to avoid fixed bottom bar overlap */}
-        <main className="flex-1 w-full relative pb-20 md:pb-0">
+        {/* bottom padding on mobile to avoid fixed bottom bar overlap; left padding on desktop for fixed sidebar */}
+        <main className="flex-1 w-full relative pb-20 md:pb-0 md:pl-16">
           <AnimatedRoutes />
         </main>
       </div>

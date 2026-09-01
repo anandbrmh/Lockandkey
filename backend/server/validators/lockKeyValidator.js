@@ -19,6 +19,7 @@ export const validateCreateRecord = [
       for (let i=0;i<arr.length;i++) {
         const p = arr[i];
         if (p.status && !allowed.includes(p.status)) throw new Error(`handoverPersons[${i}].status must be one of ${allowed.join(", ")}`);
+        if (p.keysGiven !== undefined && (!Number.isInteger(Number(p.keysGiven)) || Number(p.keysGiven) < 1)) throw new Error(`handoverPersons[${i}].keysGiven must be integer >=1`);
         if (p.personId && typeof p.personId === 'string' && p.personId.length!==24) {
           // allow empty but if provided must be 24 hex-ish; defer to isMongoId elsewhere
         }

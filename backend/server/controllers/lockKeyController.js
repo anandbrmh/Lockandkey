@@ -93,6 +93,8 @@ export const createRecord = async (req, res, next) => {
         let personId = p.personId || null;
         let name = p.name, role = p.role, contact = p.contact || p.contactNumber;
         let statusVal = allowedPersonStatus.includes(p.status) ? p.status : "active";
+        let keysGiven = p.keysGiven !== undefined && p.keysGiven !== "" ? parseInt(p.keysGiven, 10) : 1;
+        if (isNaN(keysGiven) || keysGiven < 1) keysGiven = 1;
         // handle reuse via personId (must be owned by requester)
         if (personId) {
           try {
@@ -130,6 +132,7 @@ export const createRecord = async (req, res, next) => {
           contactNumber: contact ? String(contact).trim() : undefined,
           personId: personId || undefined,
           status: statusVal,
+          keysGiven,
         };
         if (personPhoto) entry.photo = personPhoto;
         finalHandoverPersons.push(entry);
@@ -145,12 +148,14 @@ export const createRecord = async (req, res, next) => {
       // Legacy single-person flow — still support per-person photo via personPhoto_0
       let personPhoto = await uploadPersonPhoto(0);
       if (!personPhoto && reusedHandoverPhoto) personPhoto = reusedHandoverPhoto;
+      const legacyKeysGiven = req.body.keysGiven !== undefined ? parseInt(req.body.keysGiven, 10) : (req.body.handoverKeysGiven !== undefined ? parseInt(req.body.handoverKeysGiven, 10) : 1);
       finalHandoverPersons = [{
         name: String(finalHandoverName).trim(),
         role: finalHandoverRole ? String(finalHandoverRole).trim() : "",
         contactNumber: finalHandoverContact ? String(finalHandoverContact).trim() : undefined,
         personId: handoverPersonId || undefined,
         status: allowedPersonStatus.includes(req.body.handoverStatus) ? req.body.handoverStatus : "active",
+        keysGiven: isNaN(legacyKeysGiven) || legacyKeysGiven < 1 ? 1 : legacyKeysGiven,
       }];
       if (personPhoto) finalHandoverPersons[0].photo = personPhoto;
       else if (handoverPhoto) finalHandoverPersons[0].photo = handoverPhoto; // fallback to group handoverPhoto
@@ -168,9 +173,17 @@ export const createRecord = async (req, res, next) => {
     const handoverAt = handoverPhoto ? now : (finalHandoverPersons.some(p=>p.photo) ? now : null);
     const placementAt = placementPhoto ? now : null;
 
-    // keyCount handling: if provided use it, else derive from handoverPersons length or default 1
-    let finalKeyCount = keyCount !== undefined && keyCount !== "" ? Number(keyCount) : (finalHandoverPersons.length > 0 ? finalHandoverPersons.length : 1);
+    // keyCount handling: if provided use it, else derive from sum of keysGiven or default 1
+    let finalKeyCount = keyCount !== undefined && keyCount !== "" ? Number(keyCount) : (finalHandoverPersons.length > 0 ? finalHandoverPersons.reduce((s,p)=>s+(parseInt(p.keysGiven,10)||1),0) : 1);
     if (isNaN(finalKeyCount) || finalKeyCount < 1) finalKeyCount = 1;
+
+    // Validate keysGiven sum matches keyCount when persons have names (full submit); allow draft with empty persons
+    if (finalHandoverPersons.length > 0 && finalHandoverPersons.some(p=>p.name)) {
+      const sumKeys = finalHandoverPersons.reduce((s,p)=>s+(parseInt(p.keysGiven,10)||1),0);
+      if (sumKeys !== finalKeyCount) {
+        return res.status(400).json({ success: false, message: `Sum of keysGiven (${sumKeys}) must equal keyCount (${finalKeyCount}). E.g. 4 total keys with one person taking 2 leaves 2 keys → 3 persons total (2+1+1).` });
+      }
+    }
 
     const doc = await LockKeyRecord.create({
       lockPhoto,
@@ -321,15 +334,24 @@ export const updateRecord = async (req, res, next) => {
         }
         if (incoming.personId !== undefined) target.personId = incoming.personId || undefined;
         if (incoming.status !== undefined && allowedStatus.includes(incoming.status)) target.status = incoming.status;
+        if (incoming.keysGiven !== undefined) {
+          let kg = parseInt(incoming.keysGiven, 10);
+          if (!isNaN(kg) && kg >= 1) target.keysGiven = kg;
+        }
         // photo via JSON url reuse if provided
         if (incoming.photo?.url && !req.files?.[`personPhoto_${i}`]?.[0]) {
           target.photo = { url: incoming.photo.url, fileId: incoming.photo.fileId, uploadedAt: incoming.photo.uploadedAt ? new Date(incoming.photo.uploadedAt) : new Date() };
         }
       }
-      // If keyCount was updated to smaller, slice array to match (optional: keep data)
-      const currentKC = Number(record.keyCount) || record.handoverPersons.length;
-      if (record.handoverPersons.length > currentKC) {
-        // keep extra but allow; alternatively slice — we keep for data safety unless explicitly trimmed
+      // Ensure keysGiven defaults and trim logic based on sum vs keyCount
+      record.handoverPersons.forEach(p => { if (!p.keysGiven || p.keysGiven < 1) p.keysGiven = 1; });
+      // Validate sum if persons have names
+      if (record.handoverPersons.length > 0 && record.handoverPersons.some(p=>p.name)) {
+        const sumKeys = record.handoverPersons.reduce((s,p)=>s+(parseInt(p.keysGiven,10)||1),0);
+        const kc = Number(record.keyCount) || sumKeys;
+        if (sumKeys !== kc) {
+          return res.status(400).json({ success: false, message: `Sum of keysGiven (${sumKeys}) must equal keyCount (${kc}). Adjust keys per person.` });
+        }
       }
       // Sync legacy handoverPerson to first entry
       if (record.handoverPersons[0]) {

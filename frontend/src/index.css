@@ -4,137 +4,55 @@
 
 @layer base {
   body {
-    @apply font-mono bg-paper text-ink relative;
-    background-image:
-      linear-gradient(to right, #e5e7eb 1px, transparent 1px),
-      linear-gradient(to bottom, #e5e7eb 1px, transparent 1px);
-    background-size: 24px 24px;
+    @apply bg-white text-zinc-900 font-mono text-sm antialiased;
   }
-  .dark body {
-    background-image:
-      linear-gradient(to right, #1f2937 1px, transparent 1px),
-      linear-gradient(to bottom, #1f2937 1px, transparent 1px);
-  }
-  /* hand-drawn headings */
   h1, h2, h3 {
-    @apply font-display tracking-tight;
+    @apply font-sans font-semibold tracking-tight text-zinc-900;
   }
+  a { @apply underline-offset-2; }
 }
 
-/* ── WIREFRAME TOKENS ── */
+/* ── MINIMAL WIREFRAME TOKENS ── */
 @layer components {
-  /* paper card with hard border + sketch shadow */
+  /* card: thin border, no shadow, 8px radius */
   .wire-card {
-    @apply bg-white border-2 border-ink rounded-none relative;
-    box-shadow: 4px 4px 0 0 #111111;
-  }
-  .dark .wire-card {
-    @apply bg-zinc-900 border-white;
-    box-shadow: 4px 4px 0 0 #ffffff;
+    @apply bg-white border border-zinc-200 rounded-lg;
   }
   .wire-card-dashed {
-    @apply bg-white border-2 border-dashed border-ink rounded-none;
-    box-shadow: 3px 3px 0 0 #111;
+    @apply bg-white border border-dashed border-zinc-300 rounded-lg;
   }
-  .dark .wire-card-dashed {
-    @apply bg-zinc-900 border-white;
-  }
+  /* keep compat */
+  .glass-panel { @apply wire-card; }
 
-  /* wireframe button */
+  /* buttons: 1px border, rounded, no hard shadow */
   .wire-btn {
-    @apply inline-flex items-center justify-center gap-2 px-5 py-3 bg-white border-2 border-ink text-ink font-mono font-bold text-sm uppercase tracking-widest rounded-none transition-none;
-    box-shadow: 3px 3px 0 0 #111;
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2 bg-white border border-zinc-900 text-zinc-900 font-mono text-xs font-medium uppercase tracking-wide rounded-md hover:bg-zinc-900 hover:text-white transition-colors;
   }
-  .wire-btn:hover {
-    @apply bg-ink text-white translate-x-[1px] translate-y-[1px];
-    box-shadow: 2px 2px 0 0 #111;
-  }
-  .wire-btn:active {
-    @apply translate-x-[3px] translate-y-[3px];
-    box-shadow: none;
-  }
-  .wire-btn:disabled {
-    @apply opacity-40 cursor-not-allowed;
-  }
+  .wire-btn:disabled { @apply opacity-40 cursor-not-allowed; }
   .wire-btn-primary {
-    @apply bg-ink text-white;
-  }
-  .wire-btn-primary:hover {
-    @apply bg-white text-ink;
-  }
-  .dark .wire-btn {
-    @apply bg-zinc-900 border-white text-white;
-    box-shadow: 3px 3px 0 0 #fff;
-  }
-  .dark .wire-btn:hover {
-    @apply bg-white text-ink;
+    @apply bg-zinc-900 text-white hover:bg-black;
   }
 
-  /* wire input */
+  /* inputs */
   .wire-input {
-    @apply w-full px-4 py-3 bg-white border-2 border-ink rounded-none font-mono text-sm placeholder:text-zinc-400 focus:outline-none focus:bg-yellow-50;
-    box-shadow: 2px 2px 0 0 #111;
-  }
-  .dark .wire-input {
-    @apply bg-zinc-900 border-white text-white placeholder:text-zinc-500 focus:bg-zinc-800;
-    box-shadow: 2px 2px 0 0 #fff;
+    @apply w-full px-3 py-2 bg-white border border-zinc-300 rounded-md font-mono text-sm placeholder:text-zinc-400 focus:outline-none focus:border-zinc-900 focus:ring-1 focus:ring-zinc-900;
   }
 
-  /* placeholder image box with X */
+  /* placeholder */
   .wire-placeholder {
-    @apply relative bg-zinc-100 border-2 border-ink flex items-center justify-center overflow-hidden;
-    background-image:
-      linear-gradient(to top right, transparent calc(50% - 1px), #111 50%, transparent calc(50% + 1px)),
-      linear-gradient(to top left, transparent calc(50% - 1px), #111 50%, transparent calc(50% + 1px));
-  }
-  .dark .wire-placeholder {
-    @apply bg-zinc-800 border-white;
-    background-image:
-      linear-gradient(to top right, transparent calc(50% - 1px), #fff 50%, transparent calc(50% + 1px)),
-      linear-gradient(to top left, transparent calc(50% - 1px), #fff 50%, transparent calc(50% + 1px));
+    @apply bg-zinc-50 border border-dashed border-zinc-300 flex items-center justify-center text-zinc-400;
   }
 
-  /* annotation label */
+  /* minimal label */
   .wire-label {
-    @apply font-mono text-[11px] font-bold uppercase tracking-[0.14em] text-ink flex items-center gap-1.5;
+    @apply font-mono text-[11px] font-medium uppercase tracking-wide text-zinc-600;
   }
-  .wire-annotation {
-    @apply absolute -top-2 -left-2 bg-ink text-white text-[10px] font-mono font-bold px-2 py-0.5 border border-ink rotate-[-1deg];
-  }
-  .dark .wire-annotation {
-    @apply bg-white text-ink border-white;
-  }
-
-  /* sketch underline */
-  .wire-underline {
-    @apply relative inline-block;
-  }
-  .wire-underline::after {
-    content: "";
-    @apply absolute left-0 -bottom-1 w-full h-2 bg-yellow-200 -rotate-1 -z-10 opacity-60;
-  }
-
-  /* keep old glass-panel for compat but wire it */
-  .glass-panel {
-    @apply wire-card;
-  }
+  .wire-annotation { @apply hidden; }
+  .wire-tape { @apply hidden; }
+  .wire-wobble { @apply hidden; }
+  .wire-underline::after { @apply hidden; }
 }
 
-/* keep legacy dashed but wire */
 .dashed-dropzone, .dashed-dropzone-active {
   @apply wire-card-dashed;
-  background-image: none !important;
 }
-.dark .dashed-dropzone, .dark .dashed-dropzone-active {
-  background-image: none !important;
-}
-
-/* tape strip */
-.wire-tape {
-  @apply absolute -top-3 left-1/2 -translate-x-1/2 w-16 h-6 bg-yellow-200 border border-yellow-300 rotate-[-2deg] opacity-70;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-}
-
-/* wobbly */
-.wire-wobble { transform: rotate(-0.4deg); }
-.wire-wobble:nth-child(even) { transform: rotate(0.6deg); }
