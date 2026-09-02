@@ -20,6 +20,7 @@ import { ArrowLeft, ArrowRight, User, Hash, Plus, Minus, AlertCircle, Users, Map
 import BrowsePersonModal from './BrowsePersonModal';
 import BrowseLocationModal from './BrowseLocationModal';
 import { motion, AnimatePresence } from 'framer-motion';
+import {saveOfflineEntry} from '../../utils/Offline.db';  
 
 export default function LockKeyUploadWizard({ editingId }) {
   const dispatch = useDispatch();
@@ -45,18 +46,47 @@ export default function LockKeyUploadWizard({ editingId }) {
 
   const handleNext = () => { if (validateStep(currentStep, wizardState)) { setDirection(1); dispatch(nextStep()); } };
   const handlePrev = () => { setDirection(-1); dispatch(prevStep()); };
-  const handleSaveDraft = async () => {
-    if (!canSaveDraft(wizardState)) { alert('Capture Lock Photo first.'); return; }
-    const formData = buildRecordFormData(wizardState);
-    const result = isEditing && effectiveId ? await dispatch(updateRecord({ id: effectiveId, formData })) : await dispatch(createRecord(formData));
-    if (result.meta.requestStatus === 'fulfilled') setIsSuccess(true); else alert(result.payload || 'Save failed');
-  };
-  const handleSubmit = async () => {
-    if (!canSaveDraft(wizardState)) { alert('Lock Photo required.'); return; }
-    const formData = buildRecordFormData(wizardState);
-    const result = isEditing && effectiveId ? await dispatch(updateRecord({ id: effectiveId, formData })) : await dispatch(createRecord(formData));
-    if (result.meta.requestStatus === 'fulfilled') setIsSuccess(true);
-  };
+const handleSaveDraft = async () => {
+  if (!canSaveDraft(wizardState)) { alert('Capture Lock Photo first.'); return; }
+
+  if (!navigator.onLine) {
+    await saveOfflineEntry({ wizardState, isEditing, effectiveId, isDraft: true, timestamp: Date.now() });
+    setIsSuccess(true);
+    return;
+  }
+
+  const formData = buildRecordFormData(wizardState);
+  const result = isEditing && effectiveId ? await dispatch(updateRecord({ id: effectiveId, formData })) : await dispatch(createRecord(formData));
+  if (result.meta.requestStatus === 'fulfilled') setIsSuccess(true); else alert(result.payload || 'Save failed');
+};
+const handleSubmit = async () => {
+  if (!canSaveDraft(wizardState)) { alert('Lock Photo required.'); return; }
+
+  if (!navigator.onLine) {
+    // wizardState already base64 strings rakhta hai, JSON-safe hai
+    await saveOfflineEntry({ wizardState, isEditing, effectiveId, timestamp: Date.now() });
+    setIsSuccess(true); // ya ek custom "Saved offline" screen dikhao
+    return;
+  }
+
+  const formData = buildRecordFormData(wizardState);
+  try {
+    const result = isEditing && effectiveId
+      ? await dispatch(updateRecord({ id: effectiveId, formData }))
+      : await dispatch(createRecord(formData));
+
+    if (result.meta.requestStatus === 'fulfilled') {
+      setIsSuccess(true);
+    } else {
+      // API call reject hua (network beech mein gaya) — offline fallback
+      await saveOfflineEntry({ wizardState, isEditing, effectiveId, timestamp: Date.now() });
+      setIsSuccess(true);
+    }
+  } catch (err) {
+    await saveOfflineEntry({ wizardState, isEditing, effectiveId, timestamp: Date.now() });
+    setIsSuccess(true);
+  }
+};
   const handlePersonFile = (idx, file) => {
     if (!file || !file.type.startsWith('image/')) return;
     const reader = new FileReader();

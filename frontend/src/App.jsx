@@ -4,10 +4,12 @@ import { store } from './app/store';
 import AppRouter from './routes/AppRouter';
 import { initializeTheme } from './features/theme/themeSlice';
 import './App.css';
+import { useOfflineSync } from './hooks/useOfflineSync';
 
 // AppInitializer sets up themes and global auth listeners
 function AppInitializer({ children }) {
   const dispatch = useDispatch();
+  useOfflineSync();
 
   useEffect(() => {
     dispatch(initializeTheme());
