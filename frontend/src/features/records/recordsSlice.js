@@ -75,20 +75,6 @@ export const getImageKitAuth = createAsyncThunk('records/getImageKitAuth', async
   }
 });
 
-// Dedicated: change only handover photo — backend auto-sets handoverAt = server now (no client date)
-export const updateHandoverPhoto = createAsyncThunk('records/updateHandoverPhoto', async ({ id, file }, { rejectWithValue }) => {
-  try {
-    const fd = new FormData();
-    fd.append('handoverPhoto', file);
-    const { data } = await api.patch(`/lock-key-records/${id}/handover-photo`, fd, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
-    return data.data;
-  } catch (err) {
-    return rejectWithValue(err.response?.data?.message || err.normalizedMessage || 'Failed to update handover photo');
-  }
-});
-
 // Dedicated: change only placement photo — backend auto-sets placementAt = server now
 export const updatePlacementPhoto = createAsyncThunk('records/updatePlacementPhoto', async ({ id, file }, { rejectWithValue }) => {
   try {
@@ -100,6 +86,20 @@ export const updatePlacementPhoto = createAsyncThunk('records/updatePlacementPho
     return data.data;
   } catch (err) {
     return rejectWithValue(err.response?.data?.message || err.normalizedMessage || 'Failed to update placement photo');
+  }
+});
+
+// Dedicated: change per-person photo
+export const updatePersonPhoto = createAsyncThunk('records/updatePersonPhoto', async ({ id, personIndex, file }, { rejectWithValue }) => {
+  try {
+    const fd = new FormData();
+    fd.append('personPhoto', file);
+    const { data } = await api.patch(`/lock-key-records/${id}/person-photo/${personIndex}`, fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return data.data;
+  } catch (err) {
+    return rejectWithValue(err.response?.data?.message || err.normalizedMessage || 'Failed to update person photo');
   }
 });
 
@@ -146,16 +146,6 @@ const recordsSlice = createSlice({
       .addCase(deleteRecord.fulfilled, (s, { payload: id }) => { s.loading = false; s.records = s.records.filter((r) => r._id !== id && r.id !== id); })
       .addCase(deleteRecord.rejected, (s, { payload }) => { s.loading = false; s.error = payload; })
 
-      // handover photo change
-      .addCase(updateHandoverPhoto.pending, (s) => { s.loading = true; s.error = null; })
-      .addCase(updateHandoverPhoto.fulfilled, (s, { payload }) => {
-        s.loading = false;
-        const idx = s.records.findIndex((r) => (r._id || r.id) === payload._id);
-        if (idx !== -1) s.records[idx] = payload;
-        if (s.currentRecord && (s.currentRecord._id || s.currentRecord.id) === payload._id) s.currentRecord = payload;
-      })
-      .addCase(updateHandoverPhoto.rejected, (s, { payload }) => { s.loading = false; s.error = payload; })
-
       // placement photo change
       .addCase(updatePlacementPhoto.pending, (s) => { s.loading = true; s.error = null; })
       .addCase(updatePlacementPhoto.fulfilled, (s, { payload }) => {
@@ -165,6 +155,16 @@ const recordsSlice = createSlice({
         if (s.currentRecord && (s.currentRecord._id || s.currentRecord.id) === payload._id) s.currentRecord = payload;
       })
       .addCase(updatePlacementPhoto.rejected, (s, { payload }) => { s.loading = false; s.error = payload; })
+
+      // person photo change
+      .addCase(updatePersonPhoto.pending, (s) => { s.loading = true; s.error = null; })
+      .addCase(updatePersonPhoto.fulfilled, (s, { payload }) => {
+        s.loading = false;
+        const idx = s.records.findIndex((r) => (r._id || r.id) === payload._id);
+        if (idx !== -1) s.records[idx] = payload;
+        if (s.currentRecord && (s.currentRecord._id || s.currentRecord.id) === payload._id) s.currentRecord = payload;
+      })
+      .addCase(updatePersonPhoto.rejected, (s, { payload }) => { s.loading = false; s.error = payload; })
 
       .addCase(fetchStats.pending, (s) => { s.loading = true; })
       .addCase(fetchStats.fulfilled, (s, { payload }) => { s.loading = false; s.stats = payload; })

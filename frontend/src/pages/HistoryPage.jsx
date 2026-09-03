@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
-import { fetchRecords, deleteRecord, updateRecord, updateHandoverPhoto, updatePlacementPhoto, selectRecordsState } from '../features/records/recordsSlice';
+import { fetchRecords, deleteRecord, updateRecord, updatePlacementPhoto, updatePersonPhoto, selectRecordsState } from '../features/records/recordsSlice';
 import { selectCurrentUser } from '../features/auth/authSlice';
 import { Calendar, Search, Key, ChevronDown, ChevronUp, Clock, Briefcase, Trash2, AlertCircle, Filter, RefreshCw, ImagePlus, Pencil, Save, X, User, Users } from 'lucide-react';
 
@@ -19,17 +19,18 @@ const normalizeRecord = (rec) => {
   const lockPhoto = pickUrl(rec.lockPhoto);
   const keyPhoto = pickUrl(rec.keyPhoto);
   const placementPhoto = pickUrl(rec.placementPhoto);
-  const handoverPhoto = pickUrl(rec.handoverPhoto);
-  const placementAt = rec.placementAt || pickUploadedAt(rec.placementPhoto) || null;
-  const handoverAt = rec.handoverAt || pickUploadedAt(rec.handoverPhoto) || rec.createdAt;
+  const placementAt = pickUploadedAt(rec.placementPhoto) || null;
   const keyCountNum = parseInt(rec.keyCount, 10) || 1;
   const rawPersons = Array.isArray(rec.handoverPersons) && rec.handoverPersons.length > 0
     ? rec.handoverPersons.map(p=>({
         name: p.name || '', role: p.role || '', contactNumber: p.contactNumber || p.contact || '', personId: p.personId || null, status: p.status || 'active', photo: pickUrl(p.photo), keysGiven: parseInt(p.keysGiven,10) >=1 ? parseInt(p.keysGiven,10) :1,
       }))
-    : (rec.handoverPerson?.name ? [{ name: rec.handoverPerson.name, role: rec.handoverPerson.role || '', contactNumber: rec.handoverPerson.contactNumber || '', personId: null, status: 'active', photo: handoverPhoto, keysGiven: keyCountNum }] : []);
+    : [];
   const handoverPersons = filterHandoverPersonsForDisplay(rawPersons, keyCountNum);
-  return { ...rec, id, _id: id, handoverName: handoverPersons[0]?.name || rec.handoverPerson?.name || rec.handoverName || 'Unknown', handoverRole: handoverPersons[0]?.role || rec.handoverPerson?.role || rec.handoverRole || '', handoverContact: handoverPersons[0]?.contactNumber || rec.handoverPerson?.contactNumber || rec.handoverContact || '', keyCount: keyCountNum, lockPhoto, keyPhoto, placementPhoto, handoverPhoto, handoverAt, placementAt, handoverPersons, status: rec.status || 'active' };
+  const firstName = handoverPersons[0]?.name || 'Unknown';
+  const firstRole = handoverPersons[0]?.role || '';
+  const firstContact = handoverPersons[0]?.contactNumber || '';
+  return { ...rec, id, _id: id, handoverName: firstName, handoverRole: firstRole, handoverContact: firstContact, keyCount: keyCountNum, lockPhoto, keyPhoto, placementPhoto, placementAt, handoverPersons, status: rec.status || 'active' };
 };
 
 export default function HistoryPage() {
@@ -42,8 +43,7 @@ export default function HistoryPage() {
   const [expandedRecord, setExpandedRecord] = useState(null);
   const [updatingId, setUpdatingId] = useState(null);
   const [editingId, setEditingId] = useState(null);
-  const [editForm, setEditForm] = useState({ handoverName: '', handoverRole: '', handoverContact: '', keyCount: 1, status: 'active' });
-  const handoverInputRef = useRef(null);
+  const [editForm, setEditForm] = useState({ handoverPersons: [], keyCount: 1, status: 'active' });
   const placementInputRef = useRef(null);
   const personPhotoInputRef = useRef(null);
   const [targetId, setTargetId] = useState(null);
@@ -66,16 +66,8 @@ export default function HistoryPage() {
     const result = await dispatch(deleteRecord(id));
     if (result.meta.requestStatus === 'fulfilled') dispatch(fetchRecords({ page: 1, limit: 50 }));
   };
-  const triggerHandoverChange = (id) => { setTargetId(id); handoverInputRef.current?.click(); };
   const triggerPlacementChange = (id) => { setTargetId(id); placementInputRef.current?.click(); };
   const triggerPersonPhotoChange = (id, idx) => { setTargetPerson({ id, idx }); personPhotoInputRef.current?.click(); };
-  const onHandoverFile = async (e) => {
-    const file = e.target.files?.[0]; if (!file || !targetId) return;
-    setUpdatingId(targetId);
-    const result = await dispatch(updateHandoverPhoto({ id: targetId, file }));
-    setUpdatingId(null); e.target.value='';
-    if (result.meta.requestStatus === 'rejected') alert(result.payload || 'Update failed');
-  };
   const onPlacementFile = async (e) => {
     const file = e.target.files?.[0]; if (!file || !targetId) return;
     setUpdatingId(targetId);
@@ -86,18 +78,17 @@ export default function HistoryPage() {
   const onPersonPhotoFile = async (e) => {
     const file = e.target.files?.[0]; if (!file || !targetPerson) return;
     setUpdatingId(targetPerson.id);
-    const fd = new FormData(); fd.append(`personPhoto_${targetPerson.idx}`, file);
-    const result = await dispatch(updateRecord({ id: targetPerson.id, formData: fd }));
+    const result = await dispatch(updatePersonPhoto({ id: targetPerson.id, personIndex: targetPerson.idx, file }));
     setUpdatingId(null); e.target.value=''; setTargetPerson(null);
     if (result.meta.requestStatus === 'rejected') alert(result.payload || 'Update failed');
   };
   const startEditDetails = (rec) => {
     setEditingId(rec.id);
-    setEditForm({ handoverName: rec.handoverName || '', handoverRole: rec.handoverRole || '', handoverContact: rec.handoverContact || '', keyCount: rec.keyCount || 1, status: rec.status || 'active' });
+    setEditForm({ handoverPersons: rec.handoverPersons || [], keyCount: rec.keyCount || 1, status: rec.status || 'active' });
   };
   const saveEditDetails = async (id) => {
     setUpdatingId(id);
-    const payload = { handoverName: editForm.handoverName.trim(), handoverRole: editForm.handoverRole.trim(), handoverContact: editForm.handoverContact.trim(), keyCount: Number(editForm.keyCount), status: editForm.status };
+    const payload = { handoverPersons: JSON.stringify(editForm.handoverPersons), keyCount: Number(editForm.keyCount), status: editForm.status };
     const result = await dispatch(updateRecord({ id, formData: payload }));
     setUpdatingId(null);
     if (result.meta.requestStatus === 'fulfilled') setEditingId(null); else alert(result.payload || 'Update failed');
@@ -126,7 +117,6 @@ export default function HistoryPage() {
 
   return (
     <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 py-6 space-y-4">
-      <input ref={handoverInputRef} type="file" accept="image/*" className="hidden" onChange={onHandoverFile} />
       <input ref={placementInputRef} type="file" accept="image/*" className="hidden" onChange={onPlacementFile} />
       <input ref={personPhotoInputRef} type="file" accept="image/*" className="hidden" onChange={onPersonPhotoFile} />
 
@@ -182,7 +172,7 @@ export default function HistoryPage() {
                     <span className="border border-zinc-200 rounded px-2 py-1.5 bg-zinc-50 flex items-center gap-1"><Calendar className="h-3 w-3" />{new Date(rec.createdAt).toLocaleDateString()}</span>
                     <span className="border border-zinc-200 rounded px-2 py-1.5 bg-zinc-50 flex items-center gap-1"><Clock className="h-3 w-3" />{new Date(rec.createdAt).toLocaleTimeString()}</span>
                   </div>
-                  <div className="text-xs font-mono border border-zinc-200 rounded px-2 py-1.5 bg-white">Handover: {formatDateTime(rec.handoverAt)}</div>
+                  <div className="text-xs font-mono border border-zinc-200 rounded px-2 py-1.5 bg-white">Handover: {formatDateTime(rec.handoverPersons?.[0]?.photo?.uploadedAt || rec.createdAt)}</div>
                   <div className={`text-xs rounded px-2 py-1.5 border ${isDraft ? 'bg-zinc-50 border-zinc-200' : 'bg-white border-zinc-200'} flex items-center justify-between`}>
                     <span>{isDraft ? `Incomplete: ${missing.join(', ')}` : 'Complete'}</span>
                     <button onClick={() => navigate(`/wizard/edit/${rec.id}`)} className="wire-btn !py-1 !px-2 text-[11px]"><Pencil className="h-3 w-3" /> {isDraft ? 'Continue' : 'Edit'}</button>
@@ -191,7 +181,7 @@ export default function HistoryPage() {
 
                 {!isExpanded ? (
                   <div className="px-4 pb-4 grid grid-cols-4 gap-2">
-                    {[rec.lockPhoto, rec.keyPhoto, rec.placementPhoto, rec.handoverPhoto].map((p, i) => (
+                    {[rec.lockPhoto, rec.keyPhoto, rec.placementPhoto, rec.handoverPersons?.[0]?.photo].map((p, i) => (
                       <div key={i} className="aspect-square border border-zinc-200 rounded-md bg-zinc-50 overflow-hidden flex items-center justify-center">
                         {p ? <img src={p} alt="" className="w-full h-full object-cover" /> : <span className="text-[10px] font-mono text-zinc-400">—</span>}
                       </div>
@@ -204,7 +194,7 @@ export default function HistoryPage() {
                         { label: 'Lock', url: rec.lockPhoto },
                         { label: 'Key', url: rec.keyPhoto },
                         { label: 'Placement', url: rec.placementPhoto, action: () => triggerPlacementChange(rec.id) },
-                        { label: 'Handover', url: rec.handoverPhoto, action: () => triggerHandoverChange(rec.id) },
+                        { label: 'Person 1', url: rec.handoverPersons?.[0]?.photo, action: () => triggerPersonPhotoChange(rec.id, 0) },
                       ].map((it, i) => (
                         <div key={i} className="space-y-1">
                           <span className="text-[11px] font-mono">{it.label}</span>
@@ -234,8 +224,8 @@ export default function HistoryPage() {
                         </div>
                       ) : (
                         <div className="mt-2 grid gap-2">
-                          <input value={editForm.handoverName} onChange={(e)=>setEditForm({...editForm, handoverName:e.target.value})} className="wire-input" placeholder="Name" />
-                          <input value={editForm.handoverRole} onChange={(e)=>setEditForm({...editForm, handoverRole:e.target.value})} className="wire-input" placeholder="Role" />
+                          <input value={editForm.handoverPersons?.[0]?.name || ''} onChange={(e)=>setEditForm({...editForm, handoverPersons: editForm.handoverPersons.map((p,i)=>i===0?{...p,name:e.target.value}:p)})} className="wire-input" placeholder="Name (Person 1)" />
+                          <input value={editForm.handoverPersons?.[0]?.role || ''} onChange={(e)=>setEditForm({...editForm, handoverPersons: editForm.handoverPersons.map((p,i)=>i===0?{...p,role:e.target.value}:p)})} className="wire-input" placeholder="Role (Person 1)" />
                           <div className="grid grid-cols-2 gap-2">
                             <input type="number" min="1" value={editForm.keyCount} onChange={(e)=>setEditForm({...editForm, keyCount:e.target.value})} className="wire-input" />
                             <select value={editForm.status} onChange={(e)=>setEditForm({...editForm, status:e.target.value})} className="wire-input bg-white"><option value="active">active</option><option value="inactive">inactive</option><option value="returned">returned</option><option value="lost">lost</option></select>

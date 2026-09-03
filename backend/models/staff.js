@@ -22,7 +22,7 @@ const staffSchema = new mongoose.Schema(
     passwordHash: { type: String, required: false },
     // Extended profile fields — covers "remaining schema" data for staff onboarding
     phone: { type: String, trim: true },
-    contactNumber: { type: String, trim: true },
+    // contactNumber: { type: String, trim: true },
     department: { type: String, trim: true },
     designation: { type: String, trim: true },
     roleTitle: { type: String, trim: true },

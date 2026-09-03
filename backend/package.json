@@ -7,7 +7,10 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "nodemon server.js",
     "start": "node server.js",
-    "seed": "node server/config/seed.js"
+    "seed": "node server/config/seed.js",
+    "webhook:setup": "node scripts/setup-webhook-secret.js",
+    "webhook:rotate": "node scripts/setup-webhook-secret.js --rotate",
+    "webhook:show": "node scripts/setup-webhook-secret.js --show"
   },
   "keywords": [],
   "author": "",
@@ -15,8 +18,10 @@
   "type": "module",
   "dependencies": {
     "@imagekit/nodejs": "^7.11.0",
+    "axios": "^1.20.0",
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.6",
+    "crypto": "^1.0.1",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "express-rate-limit": "^8.7.0",
@@ -26,7 +31,9 @@
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^9.9.4",
     "morgan": "^1.12.0",
-    "multer": "^2.3.0"
+    "multer": "^2.3.0",
+    "node-cron": "^4.6.0",
+    "uuid": "^14.0.2"
   },
   "devDependencies": {
     "nodemon": "^3.1.14"

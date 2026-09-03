@@ -5,9 +5,9 @@ import { Key, AlertCircle } from 'lucide-react';
 
 export default function ReviewSubmit({ onSubmit, isSubmitting, isEditing }) {
   const wizardState = useSelector(selectWizard);
-  const { lockPhoto, keyPhoto, keyCount, placementPhoto, handoverPersons, handoverName, handoverRole, handoverContact, metadata } = wizardState;
+  const { lockPhoto, keyPhoto, keyCount, placementPhoto, handoverPersons } = wizardState;
   const keyCountNum = parseInt(keyCount) || 1;
-  const rawPersons = Array.isArray(handoverPersons) && handoverPersons.length ? handoverPersons : [{ name: handoverName, role: handoverRole, contact: handoverContact, keysGiven: keyCountNum, photo: null, status:'active' }];
+  const rawPersons = Array.isArray(handoverPersons) && handoverPersons.length ? handoverPersons : [{ name: '', role: '', contact: '', keysGiven: keyCountNum, photo: null, status: 'active' }];
   const personsForDisplay = rawPersons;
   const sumGiven = personsForDisplay.reduce((s,p)=>s+(parseInt(p.keysGiven,10)||1),0);
   const photos = [{ label: 'Lock', src: lockPhoto }, { label: `Key (${keyCountNum})`, src: keyPhoto }, { label: 'Placement', src: placementPhoto }];

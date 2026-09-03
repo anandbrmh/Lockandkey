@@ -76,7 +76,6 @@ export const recordsApi = createApi({
             recordData.lockPhoto = formData.get('lockPhoto') ? URL.createObjectURL(formData.get('lockPhoto')) : null;
             recordData.keyPhoto = formData.get('keyPhoto') ? URL.createObjectURL(formData.get('keyPhoto')) : null;
             recordData.placementPhoto = formData.get('placementPhoto') ? URL.createObjectURL(formData.get('placementPhoto')) : null;
-            recordData.handoverPhoto = formData.get('handoverPhoto') ? URL.createObjectURL(formData.get('handoverPhoto')) : null;
 
             // Metadata parsing
             try {

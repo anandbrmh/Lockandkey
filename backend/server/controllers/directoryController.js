@@ -44,24 +44,29 @@ export const syncDirectoryFromRecords = async (userId = null) => {
     const records = await LockKeyRecord.find(filter).lean();
     for (const rec of records) {
       const recOwner = rec.ownerId || rec.createdBy;
-      if (rec.handoverPerson?.name && recOwner) {
-        const nameTrim = rec.handoverPerson.name.trim();
-        const nameLower = nameTrim.toLowerCase();
-        const existing = await SavedPerson.findOne({ createdBy: recOwner, nameLower });
-        if (!existing) {
-          await SavedPerson.create({
-            name: nameTrim,
-            nameLower,
-            role: rec.handoverPerson.role || undefined,
-            contactNumber: rec.handoverPerson.contactNumber || undefined,
-            photo: rec.handoverPhoto?.url ? rec.handoverPhoto : undefined,
-            createdBy: recOwner,
-            usageCount: 1,
-            lastUsedAt: rec.handoverAt || rec.createdAt || new Date(),
-          });
-        } else if (!existing.photo?.url && rec.handoverPhoto?.url) {
-          existing.photo = rec.handoverPhoto;
-          await existing.save();
+      // Process each handover person
+      if (Array.isArray(rec.handoverPersons) && rec.handoverPersons.length > 0) {
+        for (const person of rec.handoverPersons) {
+          if (person.name && recOwner) {
+            const nameTrim = person.name.trim();
+            const nameLower = nameTrim.toLowerCase();
+            const existing = await SavedPerson.findOne({ createdBy: recOwner, nameLower });
+            if (!existing) {
+              await SavedPerson.create({
+                name: nameTrim,
+                nameLower,
+                role: person.role || undefined,
+                contactNumber: person.contactNumber || undefined,
+                photo: person.photo?.url ? person.photo : undefined,
+                createdBy: recOwner,
+                usageCount: 1,
+                lastUsedAt: person.photo?.uploadedAt || rec.createdAt || new Date(),
+              });
+            } else if (!existing.photo?.url && person.photo?.url) {
+              existing.photo = person.photo;
+              await existing.save();
+            }
+          }
         }
       }
 
@@ -85,7 +90,7 @@ export const syncDirectoryFromRecords = async (userId = null) => {
             photo: rec.placementPhoto?.url ? rec.placementPhoto : undefined,
             createdBy: recOwner,
             usageCount: 1,
-            lastUsedAt: rec.placementAt || rec.createdAt || new Date(),
+            lastUsedAt: rec.placementPhoto?.uploadedAt || rec.createdAt || new Date(),
           });
         }
       }

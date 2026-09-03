@@ -55,7 +55,6 @@ export const safeDeleteFromImageKit = async (fileId, excludeRecordId = null) => 
       { "lockPhoto.fileId": fileId },
       { "keyPhoto.fileId": fileId },
       { "placementPhoto.fileId": fileId },
-      { "handoverPhoto.fileId": fileId },
       { "handoverPersons.photo.fileId": fileId },
     ]};
     if (excludeRecordId) fileIdQuery._id = { $ne: excludeRecordId };
@@ -88,7 +87,6 @@ export const deleteFilesForRecord = async (record) => {
     record.lockPhoto?.fileId,
     record.keyPhoto?.fileId,
     record.placementPhoto?.fileId,
-    record.handoverPhoto?.fileId,
     ...(Array.isArray(record.handoverPersons) ? record.handoverPersons.map(p=>p.photo?.fileId).filter(Boolean) : []),
   ].filter(Boolean);
   await Promise.all(fileIds.map((id) => safeDeleteFromImageKit(id, record._id)));

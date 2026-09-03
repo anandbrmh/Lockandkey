@@ -25,7 +25,7 @@ export default function LocksDirectoryPage() {
     const locLabel = rec.savedLocationLabel || (rec.location?.lat != null ? `${rec.location.lat}, ${rec.location.lng}` : '');
     const persons = rec.handoverPersons || [];
     const personNames = persons.map(p => p.name || '').join(' ');
-    const singleName = rec.handoverPerson?.name || rec.handoverName || '';
+    const singleName = rec.handoverPersons?.[0]?.name || '';
 
     return (
       String(rec._id || rec.id).toLowerCase().includes(q) ||
@@ -90,7 +90,7 @@ export default function LocksDirectoryPage() {
             const keyCountNum = parseInt(rec.keyCount, 10) || 1;
             const rawPersons = Array.isArray(rec.handoverPersons) && rec.handoverPersons.length > 0
               ? rec.handoverPersons
-              : (rec.handoverPerson?.name ? [{ ...rec.handoverPerson, keysGiven: keyCountNum, photo: pickUrl(rec.handoverPhoto) }] : []);
+              : [];
             const handoverPersons = filterHandoverPersonsForDisplay(rawPersons, keyCountNum);
 
             const locationLabel = rec.savedLocationLabel || (rec.location?.lat != null ? `Location (${rec.location.lat.toFixed(2)}, ${rec.location.lng.toFixed(2)})` : 'Placement Location');
@@ -151,7 +151,7 @@ export default function LocksDirectoryPage() {
           const keyCountNum = parseInt(rec.keyCount, 10) || 1;
           const rawPersons = Array.isArray(rec.handoverPersons) && rec.handoverPersons.length > 0
             ? rec.handoverPersons
-            : (rec.handoverPerson?.name ? [{ ...rec.handoverPerson, keysGiven: keyCountNum, photo: pickUrl(rec.handoverPhoto) }] : []);
+            : [];
           const handoverPersons = filterHandoverPersonsForDisplay(rawPersons, keyCountNum);
 
           const locationLabel = rec.savedLocationLabel || (rec.location?.lat != null ? `Location (${rec.location.lat.toFixed(2)}, ${rec.location.lng.toFixed(2)})` : 'Placement Location');
@@ -271,7 +271,7 @@ export default function LocksDirectoryPage() {
                                 </div>
                                 <div className="border border-zinc-100 rounded p-2 bg-zinc-50/50 space-y-1">
                                   <span className="text-[11px] text-zinc-500 flex items-center gap-1"><Clock className="h-3 w-3 text-zinc-400" /> Handover Date</span>
-                                  <p className="font-medium text-zinc-800">{rec.handoverAt ? new Date(rec.handoverAt).toLocaleString() : new Date(rec.createdAt).toLocaleString()}</p>
+                                  <p className="font-medium text-zinc-800">{rec.handoverPersons?.[0]?.photo?.uploadedAt ? new Date(rec.handoverPersons[0].photo.uploadedAt).toLocaleString() : new Date(rec.createdAt).toLocaleString()}</p>
                                 </div>
                               </div>
                             </div>

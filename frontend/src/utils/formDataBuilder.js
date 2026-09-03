@@ -15,31 +15,25 @@ export const dataURLtoFile = (dataurl, filename) => {
 };
 
 /**
- * Builds FormData from the wizard Redux state ready for multipart submission to API
- * Backend expects: keyCount, handoverName, handoverRole, handoverContact, lat, lng,
- * plus 4 image fields: lockPhoto, keyPhoto, placementPhoto, handoverPhoto (multipart)
+ * Builds FormData from the wizard Redux state ready for multipart submission to API.
+ * Backend derives person name/role/contact from handoverPersons[0] — no separate top-level fields.
  */
 export const buildRecordFormData = (wizardState) => {
   const formData = new FormData();
 
-  // Required text fields (backend validates keyCount >=1, handoverName required or handoverPersonId)
+  // Key count
   formData.append('keyCount', String(wizardState.keyCount ?? 1));
+
   // Reuse IDs to avoid re-upload to ImageKit
-  if (wizardState.handoverPersonId) formData.append('handoverPersonId', wizardState.handoverPersonId);
   if (wizardState.savedLocationId) formData.append('savedLocationId', wizardState.savedLocationId);
-  // Legacy single-person fields (for backward compat)
-  if (wizardState.handoverName) formData.append('handoverName', wizardState.handoverName);
-  if (wizardState.handoverRole) formData.append('handoverRole', wizardState.handoverRole);
-  if (wizardState.handoverContact) formData.append('handoverContact', wizardState.handoverContact);
-  // New: multiple handover persons array (JSON) — each with per-person status enum
+
+  // Handover persons array (JSON) — single source of truth
   if (Array.isArray(wizardState.handoverPersons) && wizardState.handoverPersons.length > 0) {
-    // Sanitize persons for JSON — omit raw base64 photo (sent as files), keep reused URLs and status
     const sanitizedPersons = wizardState.handoverPersons.map(p => {
       const base = {
         name: p.name || '',
         role: p.role || '',
-        contact: p.contact || '',
-        contactNumber: p.contact || '',
+        contactNumber: p.contact || '',   // normalize to contactNumber only
         personId: p.personId || null,
         status: p.status || 'active',
         keysGiven: parseInt(p.keysGiven, 10) >= 1 ? parseInt(p.keysGiven, 10) : 1,
@@ -53,14 +47,7 @@ export const buildRecordFormData = (wizardState) => {
       return base;
     });
     formData.append('handoverPersons', JSON.stringify(sanitizedPersons));
-    const personIds = wizardState.handoverPersons.map(p => p.personId).filter(Boolean);
-    if (personIds.length) formData.append('handoverPersonIds', JSON.stringify(personIds));
   }
-
-  // Geolocation removed per UI requirement — no lat/lng sent
-  // (kept for backward compat but disabled)
-  // const coords = wizardState.metadata?.placementPhoto?.geolocation || ...
-  // if (coords) { formData.append('lat', ...); formData.append('lng', ...); }
 
   // Convert photos from base64 data URLs to file uploads — skip if reused (URL not data:)
   const isDataUrl = (v) => typeof v === 'string' && v.startsWith('data:');
@@ -73,21 +60,9 @@ export const buildRecordFormData = (wizardState) => {
     if (file) formData.append('keyPhoto', file);
   }
   // placementPhoto: skip file upload if reused via savedLocationId
-  if (wizardState.placementPhoto && isDataUrl(wizardState.placementPhoto) && !wizardState.savedLocationId) {
+  if (wizardState.placementPhoto && isDataUrl(wizardState.placementPhoto)) {
     const file = dataURLtoFile(wizardState.placementPhoto, 'placement.jpg');
     if (file) formData.append('placementPhoto', file);
-  } else if (wizardState.placementPhoto && isDataUrl(wizardState.placementPhoto) && wizardState.savedLocationId) {
-    // if user uploaded new after selecting saved, ignore savedLocationId? Already cleared in slice, so this branch is fallback
-    const file = dataURLtoFile(wizardState.placementPhoto, 'placement.jpg');
-    if (file) formData.append('placementPhoto', file);
-  }
-  // handoverPhoto legacy group photo: skip if reused (now secondary to per-person photos)
-  if (wizardState.handoverPhoto && isDataUrl(wizardState.handoverPhoto) && !wizardState.handoverPhotoIsReused) {
-    const file = dataURLtoFile(wizardState.handoverPhoto, 'handover.jpg');
-    if (file) formData.append('handoverPhoto', file);
-  } else if (wizardState.handoverPhoto && isDataUrl(wizardState.handoverPhoto) && wizardState.handoverPhotoIsReused) {
-    const file = dataURLtoFile(wizardState.handoverPhoto, 'handover.jpg');
-    if (file) formData.append('handoverPhoto', file);
   }
 
   // Per-person photos: each as personPhoto_<idx> if data URL (new capture)
@@ -100,7 +75,7 @@ export const buildRecordFormData = (wizardState) => {
     });
   }
 
-  // Also pack metadata JSON for debugging/audit (backend ignores unknown fields safely)
+  // Metadata JSON for debugging/audit (backend ignores unknown fields safely)
   formData.append('metadata', JSON.stringify(wizardState.metadata || {}));
 
   return formData;

@@ -15,15 +15,6 @@ const lockKeyRecordSchema = new mongoose.Schema(
     keyPhoto: { type: photoSubSchema, required: false },
     keyCount: { type: Number, required: false, default: 1, min: 1 },
     placementPhoto: { type: photoSubSchema, required: false },
-    handoverPhoto: { type: photoSubSchema, required: false },
-    // System-auto date: set server-side when handoverPhoto is uploaded/changed; never accepted from client
-    handoverAt: { type: Date, default: null, index: true },
-    placementAt: { type: Date, default: null },
-    handoverPerson: {
-      name: { type: String, required: false, trim: true },
-      role: { type: String, trim: true },
-      contactNumber: { type: String, trim: true },
-    },
     handoverPersons: [
       {
         name: { type: String, required: false, trim: true },
@@ -58,7 +49,7 @@ const lockKeyRecordSchema = new mongoose.Schema(
 lockKeyRecordSchema.index({ isDeleted: 1, status: 1, createdAt: -1 });
 lockKeyRecordSchema.index({ ownerId: 1, isDeleted: 1, createdAt: -1 });
 
-lockKeyRecordSchema.index({ "handoverPerson.name": 1 });
+lockKeyRecordSchema.index({ "handoverPersons.name": 1 });
 
 // Backward compat: expose `createdBy` as alias to `ownerId` for old clients/docs
 lockKeyRecordSchema.virtual("createdBy")

@@ -20,7 +20,6 @@ export const uploadFields = upload.fields([
   { name: "lockPhoto", maxCount: 1 },
   { name: "keyPhoto", maxCount: 1 },
   { name: "placementPhoto", maxCount: 1 },
-  { name: "handoverPhoto", maxCount: 1 },
   { name: "personPhoto_0", maxCount: 1 },
   { name: "personPhoto_1", maxCount: 1 },
   { name: "personPhoto_2", maxCount: 1 },
@@ -36,8 +35,8 @@ export const uploadFields = upload.fields([
   { name: "handoverPersons[1][photo]", maxCount: 1 },
 ]);
 
-// Single-field uploaders for dedicated photo-change endpoints (handover / placement)
-export const uploadHandoverPhoto = upload.single("handoverPhoto");
+// Single-field uploaders for dedicated photo-change endpoints (person / placement)
+export const uploadPersonPhoto = upload.single("personPhoto");
 export const uploadPlacementPhoto = upload.single("placementPhoto");
 
 export default upload;

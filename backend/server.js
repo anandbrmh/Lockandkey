@@ -23,9 +23,17 @@ const start = async () => {
     console.warn("[WARN] JWT_SECRET not set — auth routes will fail");
   }
 
+  if (!process.env.WEBHOOK_SECRET) {
+    console.warn("[WARN] WEBHOOK_SECRET not set — incoming webhooks will be rejected. Generate with: node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\" and add to .env");
+  } else {
+    console.log(`[Webhook] WEBHOOK_SECRET configured (****${process.env.WEBHOOK_SECRET.slice(-4)})`);
+  }
+
   const server = app.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
     console.log(`Health: http://localhost:${PORT}/api/health`);
+    console.log(`Webhooks inbound: http://localhost:${PORT}/api/incoming-webhooks/receive/:source`);
+    console.log(`Webhooks manage: http://localhost:${PORT}/api/webhooks (admin)`);
   });
 };
 
