@@ -126,10 +126,11 @@ export const wizardSlice = createSlice({
       if (!state.handoverPersons[idx]) state.handoverPersons[idx] = createEmptyPerson();
       state.handoverPersons[idx].personId = person._id;
       state.handoverPersons[idx].name = person.name || '';
-      state.handoverPersons[idx].role = person.role || '';
-      state.handoverPersons[idx].contact = person.contactNumber || '';
-      if (person.photo?.url) {
-        state.handoverPersons[idx].photo = person.photo.url;
+      state.handoverPersons[idx].role = person.role || person.designation || '';
+      state.handoverPersons[idx].contact = person.contactNumber || person.phone || '';
+      const photoUrl = person.photo?.url || person.imageUrl;
+      if (photoUrl) {
+        state.handoverPersons[idx].photo = photoUrl;
         state.handoverPersons[idx].photoIsReused = true;
       }
     },

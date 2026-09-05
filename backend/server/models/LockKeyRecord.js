@@ -20,7 +20,7 @@ const lockKeyRecordSchema = new mongoose.Schema(
         name: { type: String, required: false, trim: true },
         role: { type: String, trim: true },
         contactNumber: { type: String, trim: true },
-        personId: { type: mongoose.Schema.Types.ObjectId, ref: "SavedPerson", required: false },
+        personId: { type: mongoose.Schema.Types.ObjectId, ref: "Staff", required: false },
         photo: { type: photoSubSchema, required: false },
         status: {
           type: String,

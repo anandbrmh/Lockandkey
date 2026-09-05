@@ -15,13 +15,11 @@ const formatDateTime = (iso) => {
 const normalizeRecord = (rec) => {
   const id = rec._id || rec.id;
   const pickUrl = (v) => (typeof v === 'string' ? v : v?.url || null);
-  const pickUploadedAt = (v) => (typeof v === 'object' ? v?.uploadedAt || null : null);
   const lockPhoto = pickUrl(rec.lockPhoto);
   const keyPhoto = pickUrl(rec.keyPhoto);
   const placementPhoto = pickUrl(rec.placementPhoto);
-  const placementAt = pickUploadedAt(rec.placementPhoto) || null;
   const keyCountNum = parseInt(rec.keyCount, 10) || 1;
-  const rawPersons = Array.isArray(rec.handoverPersons) && rec.handoverPersons.length > 0
+  const rawPersons = Array.isArray(rec.handoverPersons)
     ? rec.handoverPersons.map(p=>({
         name: p.name || '', role: p.role || '', contactNumber: p.contactNumber || p.contact || '', personId: p.personId || null, status: p.status || 'active', photo: pickUrl(p.photo), keysGiven: parseInt(p.keysGiven,10) >=1 ? parseInt(p.keysGiven,10) :1,
       }))
@@ -30,7 +28,7 @@ const normalizeRecord = (rec) => {
   const firstName = handoverPersons[0]?.name || 'Unknown';
   const firstRole = handoverPersons[0]?.role || '';
   const firstContact = handoverPersons[0]?.contactNumber || '';
-  return { ...rec, id, _id: id, handoverName: firstName, handoverRole: firstRole, handoverContact: firstContact, keyCount: keyCountNum, lockPhoto, keyPhoto, placementPhoto, placementAt, handoverPersons, status: rec.status || 'active' };
+  return { ...rec, id, _id: id, handoverName: firstName, handoverRole: firstRole, handoverContact: firstContact, keyCount: keyCountNum, lockPhoto, keyPhoto, placementPhoto, handoverPersons, status: rec.status || 'active' };
 };
 
 export default function HistoryPage() {

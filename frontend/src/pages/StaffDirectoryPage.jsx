@@ -28,9 +28,7 @@ export default function StaffDirectoryPage() {
 
     return records.map(rec => {
       const keyCountNum = parseInt(rec.keyCount, 10) || 1;
-      const rawPersons = Array.isArray(rec.handoverPersons) && rec.handoverPersons.length > 0
-        ? rec.handoverPersons
-        : (rec.handoverPerson?.name ? [{ ...rec.handoverPerson, keysGiven: keyCountNum, photo: pickUrl(rec.handoverPhoto) }] : []);
+      const rawPersons = Array.isArray(rec.handoverPersons) ? rec.handoverPersons : [];
       const pList = filterHandoverPersonsForDisplay(rawPersons, keyCountNum);
 
       const matchedPerson = pList.find(p => {
@@ -46,11 +44,11 @@ export default function StaffDirectoryPage() {
         lockPhoto: pickUrl(rec.lockPhoto),
         keyPhoto: pickUrl(rec.keyPhoto),
         placementPhoto: pickUrl(rec.placementPhoto),
-        handoverPhoto: pickUrl(matchedPerson.photo) || pickUrl(rec.handoverPhoto),
+        handoverPhoto: pickUrl(matchedPerson.photo),
         keysGiven: matchedPerson.keysGiven,
         status: matchedPerson.status || rec.status || 'active',
-        handoverAt: rec.handoverAt || rec.createdAt,
-        locationLabel: rec.savedLocationLabel || (rec.location?.lat != null ? `(${rec.location.lat.toFixed(2)}, ${rec.location.lng.toFixed(2)})` : 'Placement Location'),
+        handoverAt: matchedPerson.photo?.uploadedAt || rec.createdAt,
+        locationLabel: rec.location?.lat != null ? `(${rec.location.lat.toFixed(2)}, ${rec.location.lng.toFixed(2)})` : 'Placement Location',
         keyCount: keyCountNum,
       };
     }).filter(Boolean);

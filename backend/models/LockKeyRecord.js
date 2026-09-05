@@ -15,15 +15,12 @@ const lockKeyRecordSchema = new mongoose.Schema(
     keyPhoto: { type: photoSubSchema, required: false },
     keyCount: { type: Number, required: false, default: 1, min: 1 },
     placementPhoto: { type: photoSubSchema, required: false },
-    // System-auto date: set server-side when any person photo is uploaded/changed
-    handoverAt: { type: Date, default: null, index: true },
-    placementAt: { type: Date, default: null },
     handoverPersons: [
       {
         name: { type: String, required: false, trim: true },
         role: { type: String, trim: true },
         contactNumber: { type: String, trim: true },
-        personId: { type: mongoose.Schema.Types.ObjectId, ref: "SavedPerson", required: false },
+        personId: { type: mongoose.Schema.Types.ObjectId, ref: "Staff", required: false },
         photo: { type: photoSubSchema, required: false },
         status: {
           type: String,
@@ -51,7 +48,19 @@ const lockKeyRecordSchema = new mongoose.Schema(
 // Indexes for filtering performance — include ownerId for per-user isolation
 lockKeyRecordSchema.index({ isDeleted: 1, status: 1, createdAt: -1 });
 lockKeyRecordSchema.index({ ownerId: 1, isDeleted: 1, createdAt: -1 });
+
 lockKeyRecordSchema.index({ "handoverPersons.name": 1 });
+
+// Backward compat: expose `createdBy` as alias to `ownerId` for old clients/docs
+lockKeyRecordSchema.virtual("createdBy")
+  .get(function () {
+    return this.ownerId || this._doc?.createdBy;
+  })
+  .set(function (v) {
+    this.ownerId = v;
+  });
+lockKeyRecordSchema.set("toJSON", { virtuals: true });
+lockKeyRecordSchema.set("toObject", { virtuals: true });
 
 const LockKeyRecord = mongoose.model("LockKeyRecord", lockKeyRecordSchema);
 export default LockKeyRecord;

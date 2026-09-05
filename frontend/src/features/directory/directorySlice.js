@@ -68,4 +68,6 @@ const directorySlice = createSlice({
 
 export const { clearDirectoryError } = directorySlice.actions;
 export const selectDirectory = (state) => state.directory;
+export const fetchStaffDirectory = fetchSavedPersons;
+export const fetchPersons = fetchSavedPersons;
 export default directorySlice.reducer;

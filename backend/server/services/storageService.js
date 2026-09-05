@@ -46,9 +46,8 @@ export const deleteFromImageKit = async (fileId) => {
 export const safeDeleteFromImageKit = async (fileId, excludeRecordId = null) => {
   if (!fileId) return;
   try {
-    // Lazy imports to avoid circular deps - models are mongoose
     const { default: LockKeyRecord } = await import("../models/LockKeyRecord.js");
-    const { default: SavedPerson } = await import("../models/SavedPerson.js");
+    const { default: Staff } = await import("../models/staff.js");
     const { default: SavedLocation } = await import("../models/SavedLocation.js");
 
     const fileIdQuery = { $or: [
@@ -59,14 +58,14 @@ export const safeDeleteFromImageKit = async (fileId, excludeRecordId = null) => 
     ]};
     if (excludeRecordId) fileIdQuery._id = { $ne: excludeRecordId };
 
-    const [recordRef, personRef, locationRef] = await Promise.all([
+    const [recordRef, staffRef, locationRef] = await Promise.all([
       LockKeyRecord.countDocuments({ ...fileIdQuery, isDeleted: false }),
-      SavedPerson.countDocuments({ "photo.fileId": fileId }),
+      Staff.countDocuments({ $or: [{ "photo.fileId": fileId }, { imageFileId: fileId }] }),
       SavedLocation.countDocuments({ "photo.fileId": fileId }),
     ]);
 
-    if (recordRef > 0 || personRef > 0 || locationRef > 0) {
-      console.log(`[ImageKit] safeDelete skipped for ${fileId}: still referenced (records:${recordRef} persons:${personRef} locs:${locationRef})`);
+    if (recordRef > 0 || staffRef > 0 || locationRef > 0) {
+      console.log(`[ImageKit] safeDelete skipped for ${fileId}: still referenced (records:${recordRef} staff:${staffRef} locs:${locationRef})`);
       return;
     }
     await deleteFromImageKit(fileId);

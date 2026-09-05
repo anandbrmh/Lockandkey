@@ -62,12 +62,13 @@ export const filterHandoverPersonsForDisplay = (persons, keyCount) => {
   const kCount = Math.max(1, parseInt(keyCount, 10) || 1);
   if (!Array.isArray(persons) || persons.length === 0) return [];
 
+  const validOnly = persons.filter((p) => p && (p.name?.trim() || p.personId || p.photo));
   let allocated = 0;
   const result = [];
 
-  for (let i = 0; i < persons.length; i++) {
+  for (let i = 0; i < validOnly.length; i++) {
     if (allocated < kCount) {
-      const p = persons[i];
+      const p = validOnly[i];
       const origKg = parseInt(p.keysGiven, 10) >= 1 ? parseInt(p.keysGiven, 10) : 1;
       const actualKeys = Math.min(origKg, kCount - allocated);
 

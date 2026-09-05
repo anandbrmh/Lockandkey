@@ -160,7 +160,7 @@ export default function StaffOnboardingPage() {
           </div>
         </section>
 
-        {/* Contact — remaining Staff fields + SavedPerson contact pattern */}
+        {/* Contact — Staff phone, contactNumber, address */}
         <section className="space-y-3">
           <h2 className="text-sm font-semibold flex items-center gap-2"><Phone className="h-4 w-4" /> Contact (remaining schema)</h2>
           <div className="grid sm:grid-cols-2 gap-3">
@@ -199,15 +199,15 @@ export default function StaffOnboardingPage() {
           <p className="text-[11px] font-mono text-zinc-500">Maps to <code>Staff.department</code>, <code>designation</code>, <code>roleTitle</code>. Completing these marks <code>profileCompleted=true</code> and unlocks wizard/history.</p>
         </section>
 
-        {/* Explainer for remaining schemas — what staff unlocks */}
+        {/* Explainer for schemas — what staff unlocks */}
         <section className="border border-dashed border-zinc-300 rounded-md p-3 bg-zinc-50 space-y-2">
-          <h3 className="text-xs font-mono uppercase tracking-wide">What this unlocks (remaining schemas)</h3>
+          <h3 className="text-xs font-mono uppercase tracking-wide">What this unlocks</h3>
           <ul className="text-xs font-mono text-zinc-600 list-disc pl-4 space-y-1">
             <li><b>LockKeyRecord</b>: lockPhoto, keyPhoto, placementPhoto, handoverPhoto, keyCount, handoverPersons (name/role/contact/status/keysGiven/photo), location (lat/lng), status — via <code>/wizard</code></li>
-            <li><b>SavedPerson</b>: name, role, contactNumber, photo — reused in handover</li>
+            <li><b>Staff Directory</b>: name, designation, contactNumber, photo — reused in handover assignments</li>
             <li><b>SavedLocation</b>: label, lat/lng, description, photo — reused in placement</li>
           </ul>
-          <p className="text-[11px] font-mono text-zinc-500">After completing this staff page you are redirected to the wizard which collects all LockKeyRecord fields. Staff gate ensures image + contact are on file.</p>
+          <p className="text-[11px] font-mono text-zinc-500">After completing this staff page you are redirected to the wizard which collects all LockKeyRecord fields. Staff profile ensures image + contact are on file for handovers.</p>
         </section>
 
         <div className="flex gap-2 pt-2 border-t border-zinc-200">

@@ -1,12 +1,11 @@
 import LockKeyRecord from "../models/LockKeyRecord.js";
-import SavedPerson from "../models/SavedPerson.js";
 import SavedLocation from "../models/SavedLocation.js";
 import Staff from "../models/staff.js";
 import { uploadToImageKit, deleteFilesForRecord, getImageKitAuthParams } from "../services/storageService.js";
-import { upsertSavedPerson, upsertSavedLocation } from "./directoryController.js";
+import { upsertSavedLocation } from "./directoryController.js";
 import triggerEvent from "../../services/dispatcher.js";
 
-// Helper: resolve staff person for admin handover (returns normalized data)
+// Helper: resolve staff person for handover (returns normalized data)
 const resolveStaffForHandover = async (staffId) => {
   try {
     const staff = await Staff.findById(staffId).lean();
@@ -73,24 +72,10 @@ export const createRecord = async (req, res, next) => {
     let reusedLocationCoords = null;
 
     if (handoverPersonId) {
-      // Admin flow: handoverPersonId may refer to a Staff (_id) — try Staff first for admin
-      let saved = null;
-      let staffMeta = null;
-      if (req.user.role === "admin") {
-        staffMeta = await resolveStaffForHandover(handoverPersonId);
-        if (staffMeta) {
-          if (staffMeta.photo?.url) reusedHandoverPhoto = { url: staffMeta.photo.url, fileId: staffMeta.photo.fileId, uploadedAt: staffMeta.photo.uploadedAt || new Date() };
-          reusedHandoverPersonMeta = { name: staffMeta.name, role: staffMeta.role, contactNumber: staffMeta.contactNumber, photo: staffMeta.photo };
-        }
-      }
-      if (!staffMeta) {
-        saved = await SavedPerson.findOne({ _id: handoverPersonId, createdBy: req.user._id });
-        if (!saved) return res.status(400).json({ success: false, message: "handoverPersonId not found or not owned by you" });
-        if (saved.photo?.url) reusedHandoverPhoto = { url: saved.photo.url, fileId: undefined, uploadedAt: saved.photo.uploadedAt || new Date() };
-        reusedHandoverPersonMeta = saved;
-        saved.usageCount += 1;
-        saved.lastUsedAt = new Date();
-        await saved.save();
+      const staffMeta = await resolveStaffForHandover(handoverPersonId);
+      if (staffMeta) {
+        if (staffMeta.photo?.url) reusedHandoverPhoto = { url: staffMeta.photo.url, fileId: staffMeta.photo.fileId, uploadedAt: staffMeta.photo.uploadedAt || new Date() };
+        reusedHandoverPersonMeta = { name: staffMeta.name, role: staffMeta.role, contactNumber: staffMeta.contactNumber, photo: staffMeta.photo };
       }
     }
 
@@ -127,52 +112,18 @@ export const createRecord = async (req, res, next) => {
         let statusVal = allowedPersonStatus.includes(p.status) ? p.status : "active";
         let keysGiven = p.keysGiven !== undefined && p.keysGiven !== "" ? parseInt(p.keysGiven, 10) : 1;
         if (isNaN(keysGiven) || keysGiven < 1) keysGiven = 1;
-        // handle reuse via personId (must be owned by requester) — admin can reuse Staff
+        // handle reuse via personId (refers to Staff)
         if (personId) {
           try {
-            // Try Staff first when admin (handover browse now returns Staff ids)
-            if (req.user.role === "admin") {
-              const staffData = await resolveStaffForHandover(personId);
-              if (staffData) {
-                if (!name) name = staffData.name;
-                if (!role) role = staffData.role;
-                if (!contact) contact = staffData.contactNumber;
-                let existingPhoto = null;
-                if (staffData.photo?.url) existingPhoto = { url: staffData.photo.url, fileId: staffData.photo.fileId, uploadedAt: staffData.photo.uploadedAt || new Date() };
-                if (!req.files?.[`personPhoto_${i}`]?.[0] && existingPhoto) {
-                  p._fallbackPhoto = existingPhoto;
-                }
-                // skip SavedPerson lookup when staff matched
-              } else {
-                const saved = await SavedPerson.findOne({ _id: personId, createdBy: req.user._id });
-                if (saved) {
-                  if (!name) name = saved.name;
-                  if (!role) role = saved.role;
-                  if (!contact) contact = saved.contactNumber;
-                  let existingPhoto = null;
-                  if (saved.photo?.url) existingPhoto = { url: saved.photo.url, fileId: undefined, uploadedAt: saved.photo.uploadedAt || new Date() };
-                  saved.usageCount += 1;
-                  saved.lastUsedAt = new Date();
-                  await saved.save();
-                  if (!req.files?.[`personPhoto_${i}`]?.[0] && existingPhoto) {
-                    p._fallbackPhoto = existingPhoto;
-                  }
-                }
-              }
-            } else {
-              const saved = await SavedPerson.findOne({ _id: personId, createdBy: req.user._id });
-              if (saved) {
-                if (!name) name = saved.name;
-                if (!role) role = saved.role;
-                if (!contact) contact = saved.contactNumber;
-                let existingPhoto = null;
-                if (saved.photo?.url) existingPhoto = { url: saved.photo.url, fileId: undefined, uploadedAt: saved.photo.uploadedAt || new Date() };
-                saved.usageCount += 1;
-                saved.lastUsedAt = new Date();
-                await saved.save();
-                if (!req.files?.[`personPhoto_${i}`]?.[0] && existingPhoto) {
-                  p._fallbackPhoto = existingPhoto;
-                }
+            const staffData = await resolveStaffForHandover(personId);
+            if (staffData) {
+              if (!name) name = staffData.name;
+              if (!role) role = staffData.role;
+              if (!contact) contact = staffData.contactNumber;
+              let existingPhoto = null;
+              if (staffData.photo?.url) existingPhoto = { url: staffData.photo.url, fileId: staffData.photo.fileId, uploadedAt: staffData.photo.uploadedAt || new Date() };
+              if (!req.files?.[`personPhoto_${i}`]?.[0] && existingPhoto) {
+                p._fallbackPhoto = existingPhoto;
               }
             }
           } catch(e){ /* ignore */ }
@@ -183,25 +134,23 @@ export const createRecord = async (req, res, next) => {
         // Also allow legacy photo field inside JSON (url reuse)
         if (!personPhoto && p.photo?.url) personPhoto = { url: p.photo.url, fileId: p.photo.fileId, uploadedAt: p.photo.uploadedAt ? new Date(p.photo.uploadedAt) : new Date() };
 
-        // For incremental save, allow empty name/role (draft). Only validate if provided persons have at least marker.
-        // We do NOT reject empty persons; store as draft with empty strings.
-        const entry = {
-          name: name ? String(name).trim() : "",
-          role: role ? String(role).trim() : "",
-          contactNumber: contact ? String(contact).trim() : undefined,
-          personId: personId || undefined,
-          status: statusVal,
-          keysGiven,
-        };
-        if (personPhoto) entry.photo = personPhoto;
-        finalHandoverPersons.push(entry);
-      }
-      if (finalHandoverPersons.length > 0) {
-        // find first non-empty for legacy handoverPerson
-        const firstFilled = finalHandoverPersons.find(p=>p.name) || finalHandoverPersons[0];
-        finalHandoverName = firstFilled.name || finalHandoverName;
-        finalHandoverRole = firstFilled.role || finalHandoverRole;
-        finalHandoverContact = firstFilled.contactNumber || finalHandoverContact;
+        const trimmedName = name ? String(name).trim() : "";
+        const trimmedRole = role ? String(role).trim() : "";
+        const trimmedContact = contact ? String(contact).trim() : undefined;
+
+        // Only store valid/non-empty persons (do not push empty dummy slots)
+        if (trimmedName || personId || personPhoto) {
+          const entry = {
+            name: trimmedName,
+            role: trimmedRole,
+            contactNumber: trimmedContact,
+            personId: personId || undefined,
+            status: statusVal,
+            keysGiven,
+          };
+          if (personPhoto) entry.photo = personPhoto;
+          finalHandoverPersons.push(entry);
+        }
       }
     } else if (finalHandoverName) {
       // Legacy single-person flow — still support per-person photo via personPhoto_0
@@ -262,20 +211,7 @@ export const createRecord = async (req, res, next) => {
       ownerId: req.user._id,
     });
 
-    try {
-      for (const pers of finalHandoverPersons) {
-        if (!pers.name) continue;
-        if (pers.personId) continue;
-        const photoForDirectory = pers.photo || reusedHandoverPhoto || null;
-        await upsertSavedPerson({
-          name: pers.name,
-          role: pers.role,
-          contactNumber: pers.contactNumber,
-          photo: photoForDirectory,
-          createdBy: req.user._id,
-        });
-      }
-    } catch (e) { console.warn("[createRecord] upsertSavedPerson failed:", e.message); }
+
 
     try {
       if (!savedLocationId && placementPhoto) {
@@ -383,37 +319,45 @@ export const updateRecord = async (req, res, next) => {
     if (lng !== undefined) { record.location = record.location || {}; record.location.lng = Number(lng); }
     if (status !== undefined) record.status = status;
 
-    // Handle per-person updates if array provided
+    // Handle per-person updates if array provided — filter out blank entries
     if (parsedHandoverPersons && Array.isArray(parsedHandoverPersons)) {
       const allowedStatus = ["active","inactive","returned","lost"];
-      // Ensure array sized to at least parsed length; if keyCount increased elsewhere, expand
-      // Update or append each entry
-      for (let i=0; i< parsedHandoverPersons.length; i++) {
+      const updatedList = [];
+
+      for (let i = 0; i < parsedHandoverPersons.length; i++) {
         const incoming = parsedHandoverPersons[i];
-        // ensure record array has index
-        if (!record.handoverPersons[i]) {
-          record.handoverPersons[i] = { name: "", role: "", contactNumber: "", status: "active" };
+        if (!incoming) continue;
+        const name = incoming.name !== undefined ? String(incoming.name).trim() : "";
+        const role = incoming.role !== undefined ? String(incoming.role).trim() : "";
+        const contactNumber = incoming.contact !== undefined || incoming.contactNumber !== undefined ? String(incoming.contact ?? incoming.contactNumber).trim() : undefined;
+        const personId = incoming.personId || undefined;
+        const statusVal = allowedStatus.includes(incoming.status) ? incoming.status : "active";
+        let keysGiven = parseInt(incoming.keysGiven, 10);
+        if (isNaN(keysGiven) || keysGiven < 1) keysGiven = 1;
+
+        let photo = undefined;
+        if (incoming.photo?.url) {
+          photo = { url: incoming.photo.url, fileId: incoming.photo.fileId, uploadedAt: incoming.photo.uploadedAt ? new Date(incoming.photo.uploadedAt) : new Date() };
+        } else if (record.handoverPersons?.[i]?.photo?.url) {
+          photo = record.handoverPersons[i].photo;
         }
-        const target = record.handoverPersons[i];
-        if (incoming.name !== undefined) target.name = String(incoming.name).trim();
-        if (incoming.role !== undefined) target.role = String(incoming.role).trim();
-        if (incoming.contact !== undefined || incoming.contactNumber !== undefined) {
-          const c = incoming.contact ?? incoming.contactNumber;
-          target.contactNumber = c ? String(c).trim() : undefined;
-        }
-        if (incoming.personId !== undefined) target.personId = incoming.personId || undefined;
-        if (incoming.status !== undefined && allowedStatus.includes(incoming.status)) target.status = incoming.status;
-        if (incoming.keysGiven !== undefined) {
-          let kg = parseInt(incoming.keysGiven, 10);
-          if (!isNaN(kg) && kg >= 1) target.keysGiven = kg;
-        }
-        // photo via JSON url reuse if provided
-        if (incoming.photo?.url && !req.files?.[`personPhoto_${i}`]?.[0]) {
-          target.photo = { url: incoming.photo.url, fileId: incoming.photo.fileId, uploadedAt: incoming.photo.uploadedAt ? new Date(incoming.photo.uploadedAt) : new Date() };
+
+        // Only keep non-empty entries
+        if (name || personId || photo?.url) {
+          const entry = {
+            name,
+            role,
+            contactNumber: contactNumber || undefined,
+            personId,
+            status: statusVal,
+            keysGiven,
+          };
+          if (photo) entry.photo = photo;
+          updatedList.push(entry);
         }
       }
-      // Ensure keysGiven defaults — no sum vs keyCount validation (one person can take multiple)
-      record.handoverPersons.forEach(p => { if (!p.keysGiven || p.keysGiven < 1) p.keysGiven = 1; });
+      record.handoverPersons = updatedList;
+
       // Admin browse-only enforcement on update
       if (req.user.role === "admin" && record.handoverPersons.length > 0) {
         for (let i = 0; i < record.handoverPersons.length; i++) {

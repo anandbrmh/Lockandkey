@@ -1,6 +1,6 @@
 import LockKeyRecord from "../models/LockKeyRecord.js";
 import User from "../models/User.js";
-import { upsertSavedPerson, upsertSavedLocation } from "./directoryController.js";
+import { upsertSavedLocation } from "./directoryController.js";
 import triggerEvent from "../../services/dispatcher.js";
 
 /**
@@ -112,16 +112,18 @@ export const createRecordViaWebhook = async (req, res, next) => {
         let keysGiven = p.keysGiven !== undefined && p.keysGiven !== "" ? parseInt(p.keysGiven, 10) : 1;
         if (isNaN(keysGiven) || keysGiven < 1) keysGiven = 1;
         const photo = normalizePhoto(p.photo);
-        const entry = {
-          name,
-          role,
-          contactNumber: contactNumber || undefined,
-          personId: p.personId || undefined,
-          status: statusVal,
-          keysGiven,
-        };
-        if (photo) entry.photo = photo;
-        finalHandoverPersons.push(entry);
+        if (name || p.personId || photo) {
+          const entry = {
+            name,
+            role,
+            contactNumber: contactNumber || undefined,
+            personId: p.personId || undefined,
+            status: statusVal,
+            keysGiven,
+          };
+          if (photo) entry.photo = photo;
+          finalHandoverPersons.push(entry);
+        }
       }
     } else if (handoverName) {
       const photo = normalizePhoto(body.handoverPhoto || body.photo);
@@ -149,22 +151,7 @@ export const createRecordViaWebhook = async (req, res, next) => {
       ownerId: owner._id,
     });
 
-    // Upsert directory entries (best-effort)
-    try {
-      for (const pers of finalHandoverPersons) {
-        if (!pers.name) continue;
-        if (pers.personId) continue;
-        await upsertSavedPerson({
-          name: pers.name,
-          role: pers.role,
-          contactNumber: pers.contactNumber,
-          photo: pers.photo || null,
-          createdBy: owner._id,
-        });
-      }
-    } catch (e) {
-      console.warn("[createRecordViaWebhook] upsertSavedPerson failed:", e.message);
-    }
+
 
     try {
       if (finalPlacementPhoto) {
