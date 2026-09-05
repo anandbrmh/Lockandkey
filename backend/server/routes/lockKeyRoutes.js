@@ -1,5 +1,5 @@
 import express from "express";
-import { getImageKitAuth, createRecord, listRecords, getRecord, updateRecord, updatePersonPhoto, updatePlacementPhoto, deleteRecord, getStats } from "../controllers/lockKeyController.js";
+import { getImageKitAuth, createRecord, listRecords, getRecord, updateRecord, updatePersonPhoto, updatePlacementPhoto, deleteRecord, getStats, getMyAssignedRecords, getMyAssignedStats } from "../controllers/lockKeyController.js";
 import { createRecordViaWebhook } from "../controllers/webhookRecordController.js";
 import authMiddleware from "../middleware/authMiddleware.js";
 import roleMiddleware from "../middleware/roleMiddleware.js";
@@ -11,6 +11,10 @@ const router = express.Router();
 
 // ImageKit auth for client-side direct upload — must be before /:id
 router.get("/auth/imagekit", authMiddleware, getImageKitAuth);
+
+// Staff/subadmin assigned locks & keys — must be before /:id
+router.get("/my-assignments/stats", authMiddleware, getMyAssignedStats);
+router.get("/my-assignments", authMiddleware, getMyAssignedRecords);
 
 // Dashboard stats — must be before /:id
 router.get("/stats/summary", authMiddleware, getStats);

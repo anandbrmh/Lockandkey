@@ -540,6 +540,88 @@ export const deleteRecord = async (req, res, next) => {
   }
 };
 
+// GET /api/lock-key-records/my-assignments — keys assigned to current staff/subadmin user
+export const getMyAssignedRecords = async (req, res, next) => {
+  try {
+    if (!['staff','subadmin'].includes(req.user.role)) {
+      return res.status(403).json({ success: false, message: 'Only staff/subadmin can view assigned keys' });
+    }
+    const staff = await Staff.findOne({ user: req.user._id }).lean();
+    if (!staff) {
+      return res.json({ success: true, data: { records: [], pagination: { total: 0, page: 1, limit: 10, pages: 0 } } });
+    }
+    const { page = 1, limit = 10, status, sort = "-createdAt" } = req.query;
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 10));
+    const skip = (pageNum - 1) * limitNum;
+
+    const baseFilter = {
+      isDeleted: false,
+      $or: [
+        { "handoverPersons.personId": staff._id },
+        { "handoverPersons.name": { $regex: `^${staff.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, $options: 'i' } },
+      ],
+    };
+    if (status) baseFilter.status = status;
+
+    const [records, total] = await Promise.all([
+      LockKeyRecord.find(baseFilter).populate("ownerId", "name email role").sort(sort).skip(skip).limit(limitNum).lean(),
+      LockKeyRecord.countDocuments(baseFilter),
+    ]);
+
+    // Filter to only persons matching this staff for keysGiven sum helper on frontend, but keep full record
+    res.json({
+      success: true,
+      data: {
+        records,
+        pagination: { total, page: pageNum, limit: limitNum, pages: Math.ceil(total / limitNum) },
+      },
+    });
+  } catch (err) { next(err); }
+};
+
+// GET /api/lock-key-records/my-assignments/stats — stats for staff/subadmin assigned keys
+export const getMyAssignedStats = async (req, res, next) => {
+  try {
+    if (!['staff','subadmin'].includes(req.user.role)) {
+      return res.status(403).json({ success: false, message: 'Only staff/subadmin can view assigned stats' });
+    }
+    const staff = await Staff.findOne({ user: req.user._id }).lean();
+    if (!staff) {
+      return res.json({ success: true, data: { totalAssignedKeys: 0, totalAssignedLocks: 0, active: 0, returned: 0, lost: 0 } });
+    }
+    const matchAssigned = {
+      isDeleted: false,
+      $or: [
+        { "handoverPersons.personId": staff._id },
+        { "handoverPersons.name": { $regex: `^${staff.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, $options: 'i' } },
+      ],
+    };
+    const [totalAssignedLocks, active, returned, lost, assignedKeysAgg] = await Promise.all([
+      LockKeyRecord.countDocuments(matchAssigned),
+      LockKeyRecord.countDocuments({ ...matchAssigned, status: "active" }),
+      LockKeyRecord.countDocuments({ ...matchAssigned, status: "returned" }),
+      LockKeyRecord.countDocuments({ ...matchAssigned, status: "lost" }),
+      LockKeyRecord.aggregate([
+        { $match: matchAssigned },
+        { $unwind: "$handoverPersons" },
+        { $match: { $or: [{ "handoverPersons.personId": staff._id }, { "handoverPersons.name": { $regex: `^${staff.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, $options: 'i' } }] } },
+        { $group: { _id: null, totalKeys: { $sum: "$handoverPersons.keysGiven" } } },
+      ]),
+    ]);
+    res.json({
+      success: true,
+      data: {
+        totalAssignedLocks,
+        totalAssignedKeys: assignedKeysAgg[0]?.totalKeys || 0,
+        active,
+        returned,
+        lost,
+      },
+    });
+  } catch (err) { next(err); }
+};
+
 // GET /api/lock-key-records/stats/summary — dashboard stats (isolated per user)
 export const getStats = async (req, res, next) => {
   try {

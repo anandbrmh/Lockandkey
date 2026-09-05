@@ -12,6 +12,7 @@ import StaffDirectoryPage from '../pages/StaffDirectoryPage';
 import LocksDirectoryPage from '../pages/LocksDirectoryPage';
 import AdminSettingsPage from '../pages/AdminSettingsPage';
 import AdminStaffDashboard from '../pages/AdminStaffDashboard';
+import StaffDashboard from '../pages/StaffDashboard';
 import { motion, AnimatePresence } from 'framer-motion';
 
 // Page Transition wrapper component
@@ -122,6 +123,16 @@ const AnimatedRoutes = () => {
             <ProtectedRoute requireStaffComplete>
               <PageWrapper>
                 <LocksDirectoryPage />
+              </PageWrapper>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/staff/dashboard"
+          element={
+            <ProtectedRoute requireStaffComplete>
+              <PageWrapper>
+                <StaffDashboard />
               </PageWrapper>
             </ProtectedRoute>
           }

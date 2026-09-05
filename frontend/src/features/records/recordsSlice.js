@@ -75,6 +75,26 @@ export const getImageKitAuth = createAsyncThunk('records/getImageKitAuth', async
   }
 });
 
+export const fetchMyAssignedRecords = createAsyncThunk('records/fetchMyAssigned', async (params = {}, { rejectWithValue }) => {
+  try {
+    const { data } = await api.get('/lock-key-records/my-assignments', { params });
+    if (data?.data?.records) return data.data;
+    if (Array.isArray(data?.data)) return { records: data.data, pagination: null };
+    return { records: data.data || [], pagination: null };
+  } catch (err) {
+    return rejectWithValue(err.response?.data?.message || err.normalizedMessage || 'Failed to fetch assigned locks');
+  }
+});
+
+export const fetchMyAssignedStats = createAsyncThunk('records/fetchMyAssignedStats', async (_, { rejectWithValue }) => {
+  try {
+    const { data } = await api.get('/lock-key-records/my-assignments/stats');
+    return data.data;
+  } catch (err) {
+    return rejectWithValue(err.response?.data?.message || err.normalizedMessage || 'Failed to fetch assigned stats');
+  }
+});
+
 // Dedicated: change only placement photo — backend auto-sets placementAt = server now
 export const updatePlacementPhoto = createAsyncThunk('records/updatePlacementPhoto', async ({ id, file }, { rejectWithValue }) => {
   try {
@@ -110,6 +130,10 @@ const recordsSlice = createSlice({
     pagination: null,
     currentRecord: null,
     stats: null,
+    myAssigned: [],
+    myAssignedPagination: null,
+    myAssignedStats: null,
+    myAssignedLoading: false,
     imageKitAuth: null,
     loading: false,
     creating: false,
@@ -170,7 +194,15 @@ const recordsSlice = createSlice({
       .addCase(fetchStats.fulfilled, (s, { payload }) => { s.loading = false; s.stats = payload; })
       .addCase(fetchStats.rejected, (s, { payload }) => { s.loading = false; s.error = payload; })
 
-      .addCase(getImageKitAuth.fulfilled, (s, { payload }) => { s.imageKitAuth = payload; });
+      .addCase(getImageKitAuth.fulfilled, (s, { payload }) => { s.imageKitAuth = payload; })
+
+      .addCase(fetchMyAssignedRecords.pending, (s) => { s.myAssignedLoading = true; s.error = null; })
+      .addCase(fetchMyAssignedRecords.fulfilled, (s, { payload }) => { s.myAssignedLoading = false; s.myAssigned = payload.records || []; s.myAssignedPagination = payload.pagination || null; })
+      .addCase(fetchMyAssignedRecords.rejected, (s, { payload }) => { s.myAssignedLoading = false; s.error = payload; })
+
+      .addCase(fetchMyAssignedStats.pending, (s) => { s.myAssignedLoading = true; })
+      .addCase(fetchMyAssignedStats.fulfilled, (s, { payload }) => { s.myAssignedLoading = false; s.myAssignedStats = payload; })
+      .addCase(fetchMyAssignedStats.rejected, (s, { payload }) => { s.myAssignedLoading = false; s.error = payload; });
   },
 });
 

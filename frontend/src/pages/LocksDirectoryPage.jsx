@@ -3,13 +3,16 @@ import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import { fetchRecords, selectRecordsState } from '../features/records/recordsSlice';
 import { filterHandoverPersonsForDisplay } from '../utils/validators';
-import { KeyRound, Search, MapPin, Calendar, Clock, User, Users, Pencil, X, Check, Shield, AlertCircle } from 'lucide-react';
+import { KeyRound, Search, MapPin, Calendar, Clock, User, Users, Pencil, X, Check, Shield, AlertCircle, PlusCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { selectCurrentUser } from '../features/auth/authSlice';
 
 export default function LocksDirectoryPage() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const { records = [], loading, error } = useSelector(selectRecordsState);
+  const currentUser = useSelector(selectCurrentUser);
+  const canSubmitRecord = currentUser?.role === 'admin' || currentUser?.role === 'subadmin';
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedLock, setSelectedLock] = useState(null);
 
@@ -50,6 +53,11 @@ export default function LocksDirectoryPage() {
         </div>
         <div className="flex items-center gap-2">
           <span className="border border-zinc-200 rounded-md px-3 py-1.5 text-xs font-mono bg-zinc-50">{records.length} Total Locks</span>
+          {canSubmitRecord && (
+            <button onClick={() => navigate('/wizard')} className="wire-btn wire-btn-primary !py-1.5 text-xs flex items-center gap-1" title="Submit new Lock & Key record">
+              <PlusCircle className="h-3.5 w-3.5" /> New Record
+            </button>
+          )}
         </div>
       </div>
 
@@ -180,9 +188,11 @@ export default function LocksDirectoryPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <button onClick={() => { setSelectedLock(null); navigate(`/wizard/edit/${id}`); }} className="wire-btn wire-btn-primary !py-1.5 text-xs">
-                      <Pencil className="h-3.5 w-3.5" /> Edit Record
-                    </button>
+                    {canSubmitRecord && (
+                      <button onClick={() => { setSelectedLock(null); navigate(`/wizard/edit/${id}`); }} className="wire-btn wire-btn-primary !py-1.5 text-xs">
+                        <Pencil className="h-3.5 w-3.5" /> Edit Record
+                      </button>
+                    )}
                     <button onClick={() => setSelectedLock(null)} className="h-8 w-8 rounded-md border border-zinc-200 bg-white flex items-center justify-center hover:bg-zinc-100">
                       <X className="h-4 w-4" />
                     </button>
