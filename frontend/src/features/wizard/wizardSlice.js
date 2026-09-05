@@ -128,7 +128,7 @@ export const wizardSlice = createSlice({
       state.handoverPersons[idx].name = person.name || '';
       state.handoverPersons[idx].role = person.role || person.designation || '';
       state.handoverPersons[idx].contact = person.contactNumber || person.phone || '';
-      const photoUrl = person.photo?.url || person.imageUrl;
+      const photoUrl = person.photo?.url || null;
       if (photoUrl) {
         state.handoverPersons[idx].photo = photoUrl;
         state.handoverPersons[idx].photoIsReused = true;

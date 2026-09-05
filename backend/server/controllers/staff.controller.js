@@ -49,19 +49,15 @@ export async function fillStaffData(req, res, next) {
       address,
     } = req.body;
 
-    // Resolve file: field can be "image", "photo", "imageUrl"
+    // Resolve file: field can be "image" or "photo"
     const file = req.file || req.files?.image?.[0] || req.files?.photo?.[0] || null;
 
     let photo = undefined;
-    let imageUrl;
-    let imageFileId;
 
     if (file) {
       const ext = file.originalname?.split(".").pop() || "jpg";
       const fileName = `staff-${userId}-${Date.now()}.${ext}`;
       const uploaded = await uploadToImageKit(file.buffer, fileName, "/staff/photos");
-      imageUrl = uploaded.url;
-      imageFileId = uploaded.fileId;
       photo = { url: uploaded.url, fileId: uploaded.fileId, uploadedAt: new Date() };
     }
 
@@ -89,12 +85,10 @@ export async function fillStaffData(req, res, next) {
 
     if (photo) {
       update.photo = photo;
-      update.imageUrl = imageUrl;
-      update.imageFileId = imageFileId;
     }
 
     // Completion rule: name + email + (photo or phone/department) — require at least name/email + one identifier
-    const hasPhoto = !!(photo || staff?.photo?.url || staff?.imageUrl);
+    const hasPhoto = !!(photo || staff?.photo?.url);
     const hasContact = !!(update.phone || update.contactNumber);
     // Mark completed if basic fields present; you can tighten this as needed
     const canComplete = !!(resolvedName && resolvedEmail && (hasPhoto || hasContact || update.department || update.designation));
@@ -127,4 +121,64 @@ export async function fillStaffData(req, res, next) {
  */
 export async function updateStaffProfile(req, res, next) {
   return fillStaffData(req, res, next);
+}
+
+export async function verifyAdminCode(req, res, next) {
+  try {
+    const { adminCode } = req.body;
+    const codeStr = String(adminCode || "").trim();
+    if (!/^\d{4}$/.test(codeStr)) return res.status(400).json({ success: false, message: "adminCode must be exactly 4 digits" });
+    const { default: User } = await import("../models/User.js");
+    const adminUser = await User.findOne({ role: "admin", adminCode: codeStr });
+    if (!adminUser) return res.status(400).json({ success: false, message: "Invalid admin code" });
+    let staff = await Staff.findOne({ user: req.user._id });
+    if (!staff) {
+      staff = await Staff.create({
+        user: req.user._id,
+        name: req.user.name,
+        email: req.user.email,
+        adminCodeVerified: true,
+        verifiedAdminCode: codeStr,
+        linkedAdmin: adminUser._id,
+        profileCompleted: false,
+      });
+    } else {
+      staff.adminCodeVerified = true;
+      staff.verifiedAdminCode = codeStr;
+      staff.linkedAdmin = adminUser._id;
+      await staff.save();
+    }
+    res.json({ success: true, message: "Admin code verified — you will now appear on admin dashboard", data: staff });
+  } catch (err) { next(err); }
+}
+
+export async function listVerifiedStaff(req, res, next) {
+  try {
+    if (req.user.role !== "admin") return res.status(403).json({ success: false, message: "Only admin can view verified staff" });
+    const filter = { adminCodeVerified: true };
+    if (req.user.adminCode) {
+      filter.$or = [{ linkedAdmin: req.user._id }, { verifiedAdminCode: req.user.adminCode }];
+    }
+    const list = await Staff.find(filter).populate("user", "name email role adminCode").populate("linkedAdmin", "name email").sort("-updatedAt").lean();
+    res.json({ success: true, data: list });
+  } catch (err) { next(err); }
+}
+
+export async function promoteStaff(req, res, next) {
+  try {
+    if (req.user.role !== "admin") return res.status(403).json({ success: false, message: "Only admin can promote staff" });
+    const { id } = req.params;
+    const { role } = req.body;
+    const targetRole = role === "subadmin" ? "subadmin" : role === "staff" ? "staff" : null;
+    if (!targetRole) return res.status(400).json({ success: false, message: "role must be 'subadmin' or 'staff'" });
+    const staff = await Staff.findById(id).populate("user");
+    if (!staff) return res.status(404).json({ success: false, message: "Staff not found" });
+    const { default: User } = await import("../models/User.js");
+    const user = await User.findById(staff.user._id || staff.user);
+    if (!user) return res.status(404).json({ success: false, message: "Linked user not found" });
+    if (user.role === "admin") return res.status(400).json({ success: false, message: "Cannot change admin role" });
+    user.role = targetRole;
+    await user.save();
+    res.json({ success: true, message: `Staff ${targetRole === "subadmin" ? "promoted to subadmin" : "demoted to staff"}`, data: { staffId: staff._id, userId: user._id, role: user.role } });
+  } catch (err) { next(err); }
 }

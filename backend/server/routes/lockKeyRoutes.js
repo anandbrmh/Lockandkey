@@ -20,9 +20,9 @@ router.get("/stats/summary", authMiddleware, getStats);
 router.post("/webhook", webhookAuth, createRecordViaWebhook);
 router.post("/webhook/:source", webhookAuth, createRecordViaWebhook);
 
-// List & Create (JWT)
+// List & Create (JWT) — only admin/subadmin can submit
 router.get("/", authMiddleware, listRecords);
-router.post("/", authMiddleware, uploadFields, validateCreateRecord, createRecord);
+router.post("/", authMiddleware, roleMiddleware("admin", "subadmin"), uploadFields, validateCreateRecord, createRecord);
 
 // Dedicated photo-change endpoints
 router.patch("/:id/person-photo/:personIndex", authMiddleware, uploadPersonPhoto, updatePersonPhoto);

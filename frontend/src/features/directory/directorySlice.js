@@ -1,9 +1,11 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import api from '../../app/api';
 
-export const fetchSavedPersons = createAsyncThunk('directory/fetchPersons', async ({ search = '', page = 1, limit = 20 } = {}, { rejectWithValue }) => {
+export const fetchSavedPersons = createAsyncThunk('directory/fetchPersons', async ({ search = '', page = 1, limit = 20, verified } = {}, { rejectWithValue }) => {
   try {
-    const { data } = await api.get('/directory/persons', { params: { search, page, limit } });
+    const params = { search, page, limit };
+    if (verified !== undefined) params.verified = verified;
+    const { data } = await api.get('/directory/persons', { params });
     return data.data;
   } catch (err) {
     return rejectWithValue(err.response?.data?.message || err.normalizedMessage || 'Failed to fetch persons');

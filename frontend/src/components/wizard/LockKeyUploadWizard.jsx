@@ -148,7 +148,7 @@ const handleSubmit = async () => {
           <div key="handover" className="space-y-4">
             <div>
               <h2 className="text-sm font-semibold">Handover — {handoverPersons.length} {handoverPersons.length === 1 ? 'person form' : 'person forms'} ({keyCountNum} keys total)</h2>
-              <p className="text-xs font-mono text-zinc-500">{isAdmin ? 'Admin: browse existing staff only — photo + name come from staff record (no upload/camera).' : 'Allocating multiple keys to a person automatically reduces the number of forms needed to distribute all available keys.'}</p>
+              <p className="text-xs font-mono text-zinc-500">{isAdmin ? 'Admin: browse verified staff only — only staff who submitted your admin code appear (photo + name from verified record, no upload/camera).' : 'Allocating multiple keys to a person automatically reduces the number of forms needed to distribute all available keys.'}</p>
               <div className="mt-2 flex gap-2 text-xs font-mono">
                 <span className="border rounded px-2 py-1 bg-zinc-900 text-white border-zinc-900">Total keys: {keyCountNum}</span>
                 <span className="border rounded px-2 py-1 bg-zinc-50 border-zinc-200">Forms: {handoverPersons.length}</span>
@@ -161,18 +161,18 @@ const handleSubmit = async () => {
               <div key={idx} className="wire-card p-3 space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-mono flex items-center gap-1"><span className="h-6 w-6 rounded border border-zinc-900 flex items-center justify-center text-xs">{idx + 1}</span> Person {idx + 1} · <span className="border rounded px-1 text-[11px]">{person.status}</span> · <span className="border rounded px-1 text-[11px] bg-zinc-900 text-white">{person.keysGiven || 1} key{(person.keysGiven||1)>1?'s':''}</span></span>
-                  <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2">
                     {handoverPersons.length > 1 && <button type="button" onClick={() => dispatch(removePerson(idx))} className="text-xs border border-red-200 bg-red-50 text-red-700 px-2 py-1 rounded">Remove</button>}
-                    {person.personId ? <button type="button" onClick={() => dispatch(clearSavedPerson({ index: idx }))} className="text-xs underline">Clear</button> : <button type="button" onClick={() => { setActivePersonIdx(idx); setShowPersonBrowse(true); }} className="text-xs underline">Browse staff</button>}
+                    {person.personId ? <button type="button" onClick={() => dispatch(clearSavedPerson({ index: idx }))} className="text-xs underline">Clear</button> : <button type="button" onClick={() => { setActivePersonIdx(idx); setShowPersonBrowse(true); }} className="text-xs underline">{isAdmin ? 'Browse verified staff' : 'Browse staff'}</button>}
                   </div>
                 </div>
                 <div className="space-y-1">
-                  <label className="wire-label flex items-center gap-1"><Camera className="h-3 w-3" /> Photo {isAdmin && <span className="text-[10px] font-mono text-amber-700">(staff only)</span>}</label>
+                  <label className="wire-label flex items-center gap-1"><Camera className="h-3 w-3" /> Photo {isAdmin && <span className="text-[10px] font-mono text-amber-700">(verified staff only)</span>}</label>
                   {!person.photo ? (
                     isAdmin ? (
                       <div className="border border-dashed border-zinc-300 rounded-md p-3 bg-zinc-50 text-center">
-                        <p className="text-xs font-mono text-zinc-500 mb-2">Admin must browse existing staff — upload/camera disabled</p>
-                        <button type="button" onClick={() => { setActivePersonIdx(idx); setShowPersonBrowse(true); }} className="wire-btn wire-btn-primary text-xs mx-auto"><Users className="h-3.5 w-3.5" /> Browse staff</button>
+                        <p className="text-xs font-mono text-zinc-500 mb-2">Admin must browse verified staff — upload/camera disabled</p>
+                        <button type="button" onClick={() => { setActivePersonIdx(idx); setShowPersonBrowse(true); }} className="wire-btn wire-btn-primary text-xs mx-auto"><Users className="h-3.5 w-3.5" /> Browse verified staff</button>
                       </div>
                     ) : (
                       <div className="flex gap-2">

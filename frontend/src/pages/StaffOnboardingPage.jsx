@@ -1,16 +1,19 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
-import { Camera, Upload, Trash2, User, Mail, Phone, Building, MapPin, Briefcase, ShieldCheck, AlertCircle, Check, ArrowRight, Image as ImageIcon } from 'lucide-react';
+import { Camera, Upload, Trash2, User, Mail, Phone, Building, MapPin, Briefcase, ShieldCheck, AlertCircle, Check, ArrowRight, Image as ImageIcon, Shield } from 'lucide-react';
 import { selectCurrentUser } from '../features/auth/authSlice';
-import { fetchStaffProfile, completeStaffProfile, selectStaff } from '../features/staff/staffSlice';
+import { fetchStaffProfile, completeStaffProfile, verifyAdminCode, selectStaff } from '../features/staff/staffSlice';
 import { useCamera } from '../hooks/useCamera';
 
 export default function StaffOnboardingPage() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const user = useSelector(selectCurrentUser);
-  const { profile, completed, saving, error, loading } = useSelector(selectStaff);
+  const { profile, completed, saving, error, loading, verifying } = useSelector(selectStaff);
+  const [adminCode, setAdminCode] = useState('');
+  const [verifyMsg, setVerifyMsg] = useState(null);
+  const [verifyError, setVerifyError] = useState(null);
 
   const [form, setForm] = useState({
     name: '',
@@ -42,7 +45,8 @@ export default function StaffOnboardingPage() {
         roleTitle: profile.roleTitle || '',
         address: profile.address || '',
       });
-      if (profile.photo?.url || profile.imageUrl) setPhotoPreview(profile.photo?.url || profile.imageUrl);
+      if (profile.photo?.url) setPhotoPreview(profile.photo.url);
+      if (profile.verifiedAdminCode) setAdminCode(profile.verifiedAdminCode);
     } else if (user) {
       setForm(f => ({ ...f, name: user.name || '', email: user.email || '' }));
     }
@@ -78,6 +82,15 @@ export default function StaffOnboardingPage() {
 
   const clearPhoto = () => { setPhotoPreview(null); setPhotoFile(null); };
 
+  const handleVerify = async () => {
+    setVerifyMsg(null); setVerifyError(null);
+    const result = await dispatch(verifyAdminCode({ adminCode }));
+    if (result.meta.requestStatus === 'fulfilled') {
+      setVerifyMsg(result.payload?.message || 'Verified');
+      dispatch(fetchStaffProfile());
+    } else setVerifyError(result.payload || 'Invalid code');
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     const fd = new FormData();
@@ -85,7 +98,9 @@ export default function StaffOnboardingPage() {
     if (photoFile) fd.append('image', photoFile);
     const result = await dispatch(completeStaffProfile(fd));
     if (result.meta.requestStatus === 'fulfilled' && result.payload?.completed) {
-      navigate('/wizard');
+      const role = user?.role;
+      if (role === 'admin' || role === 'subadmin') navigate('/wizard');
+      else navigate('/');
     }
   };
 
@@ -113,9 +128,9 @@ export default function StaffOnboardingPage() {
       )}
 
       <form onSubmit={handleSubmit} className="wire-card p-5 sm:p-6 space-y-6">
-        {/* Photo section — covers staff imageUrl / photo sub-schema */}
+        {/* Photo section — staff photo sub-schema */}
         <section className="space-y-3">
-          <h2 className="text-sm font-semibold flex items-center gap-2"><ImageIcon className="h-4 w-4" /> Staff Photo <span className="text-[11px] font-mono text-zinc-500">(imageUrl / photo.url + fileId)</span></h2>
+          <h2 className="text-sm font-semibold flex items-center gap-2"><ImageIcon className="h-4 w-4" /> Staff Photo <span className="text-[11px] font-mono text-zinc-500">(photo.url + fileId)</span></h2>
           {!photoPreview ? (
             <div className="flex flex-wrap gap-2">
               <button type="button" onClick={() => setShowCamera(true)} className="wire-btn wire-btn-primary text-xs"><Camera className="h-3.5 w-3.5" /> Camera</button>
@@ -139,14 +154,14 @@ export default function StaffOnboardingPage() {
               </div>
             </div>
           )}
-          <p className="text-[11px] font-mono text-zinc-500">Stored as <code>Staff.photo.url</code> + <code>fileId</code> + <code>uploadedAt</code> and <code>imageUrl/imageFileId</code> for backward compat. 5MB max.</p>
+          <p className="text-[11px] font-mono text-zinc-500">Stored as <code>Staff.photo.url</code> + <code>fileId</code> + <code>uploadedAt</code>. 5MB max.</p>
         </section>
 
         <div className="border-t border-zinc-200" />
 
-        {/* Identity — covers Staff.name, email, User linkage */}
+        {/* Identity — covers Staff.name, email, User linkage + admin code under profile */}
         <section className="space-y-3">
-          <h2 className="text-sm font-semibold flex items-center gap-2"><User className="h-4 w-4" /> Identity</h2>
+          <h2 className="text-sm font-semibold flex items-center gap-2"><User className="h-4 w-4" /> Identity {user?.role === 'subadmin' && <span title="Sub-admin verified" className="ml-1 inline-flex items-center justify-center h-5 w-5 rounded-full bg-blue-600 text-white"><svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-white"><path d="M9 16.2l-3.5-3.5 1.4-1.4L9 13.4l7.1-7.1 1.4 1.4z" /></svg></span>}</h2>
           <div className="grid sm:grid-cols-2 gap-3">
             <div>
               <label className="wire-label flex items-center gap-1"><User className="h-3 w-3" /> Name *</label>
@@ -157,6 +172,18 @@ export default function StaffOnboardingPage() {
               <input type="email" value={form.email} onChange={e=>setForm({...form,email:e.target.value})} required className="wire-input mt-1 bg-zinc-50" placeholder="staff@example.com" />
               <p className="text-[11px] font-mono text-zinc-500">Defaults from login; can be corrected here.</p>
             </div>
+          </div>
+          {/* 4-digit admin code — inside profile, required for admin dashboard listing */}
+          <div className="border border-zinc-200 rounded-md p-3 bg-amber-50/20 space-y-2">
+            <label className="wire-label flex items-center gap-1"><Shield className="h-3 w-3" /> Submit 4-digit Admin Code <span className="text-[10px] font-mono text-zinc-500">(under profile)</span> {profile?.adminCodeVerified && <span className="ml-1 text-emerald-700 text-[11px] flex items-center gap-1"><Check className="h-3 w-3" /> verified</span>}</label>
+            <p className="text-[11px] font-mono text-zinc-500">Enter the code shared by your admin. Only verified staff appear on the Admin Staff dashboard. {user?.role === 'subadmin' && <span className="inline-flex items-center gap-1 text-blue-700 font-semibold"><span className="inline-flex h-4 w-4 rounded-full bg-blue-600 text-white items-center justify-center"><svg viewBox="0 0 24 24" className="h-2.5 w-2.5 fill-white"><path d="M9 16.2l-3.5-3.5 1.4-1.4L9 13.4l7.1-7.1 1.4 1.4z" /></svg></span> Sub-admin</span>}</p>
+            <div className="flex gap-2 items-center">
+              <input value={adminCode} onChange={e=>setAdminCode(e.target.value.replace(/\D/g,'').slice(0,4))} maxLength={4} inputMode="numeric" placeholder="e.g. 1234" className="wire-input w-28 font-mono tracking-widest" />
+              <button type="button" onClick={handleVerify} disabled={verifying || adminCode.length!==4} className="wire-btn wire-btn-primary text-xs">{verifying ? 'Verifying…' : 'Verify Code'}</button>
+              {profile?.adminCodeVerified && <span className="text-xs font-mono text-emerald-700 flex items-center gap-1"><Check className="h-3 w-3" /> Linked</span>}
+            </div>
+            {verifyMsg && <p className="text-xs text-emerald-700">{verifyMsg}</p>}
+            {verifyError && <p className="text-xs text-red-600">{verifyError}</p>}
           </div>
         </section>
 

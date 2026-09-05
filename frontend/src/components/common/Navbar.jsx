@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useSelector, useDispatch } from 'react-redux';
-import { KeyRound, History, PlusCircle, Home, Menu, X, LogOut, LogIn, UserPlus, Users, Shield } from 'lucide-react';
+import { KeyRound, History, PlusCircle, Home, Menu, X, LogOut, LogIn, UserPlus, Users, Shield, Settings ,ShieldUser} from 'lucide-react';
 import { selectIsAuthenticated, selectCurrentUser, logout } from '../../features/auth/authSlice';
 import { resetWizard } from '../../features/wizard/wizardSlice';
 
@@ -24,13 +24,18 @@ export default function Navbar() {
     setIsOpen(false);
   };
 
+  const canSubmitRecord = currentUser?.role === 'admin' || currentUser?.role === 'subadmin';
+
   const navItems = [
     { to: '/', label: 'Home', icon: Home },
-    { to: '/wizard', label: 'New', icon: PlusCircle },
+    ...(canSubmitRecord ? [{ to: '/wizard', label: 'New', icon: PlusCircle }] : []),
     // { to: '/history', label: 'History', icon: History },
-    { to: '/staff-directory', label: 'Staff', icon: Users },
+   
     { to: '/locks-directory', label: 'Locks', icon: Shield },
     ...(currentUser?.role === 'staff' ? [{ to: '/staff/complete', label: 'Profile', icon: UserPlus }] : []),
+    ...(currentUser?.role === 'admin' ? [{ to: '/admin/settings', label: 'Admin Settings', icon: Settings }] : []),
+    ...(currentUser?.role === 'admin' ? [{ to: '/admin/staff', label: ' Staff', icon: ShieldUser }] : []),
+     { to: '/staff-directory', label: 'uSERS', icon: Users },
   ];
 
   const linkCls = ({ isActive }) =>
@@ -81,7 +86,6 @@ export default function Navbar() {
                 </span>
                 <div className="flex flex-col overflow-hidden opacity-0 w-0 group-hover/sidebar:opacity-100 group-hover/sidebar:w-auto transition-all duration-200">
                   <span className="text-xs font-mono font-medium truncate leading-none">{currentUser?.name}</span>
-                  <span className="text-[10px] font-mono text-zinc-500 truncate">{currentUser?.role}</span>
                 </div>
               </div>
               <button onClick={handleLogout} className="flex items-center gap-3 px-3 py-2.5 rounded-md border border-zinc-900 bg-white text-zinc-900 text-xs font-mono uppercase tracking-wide hover:bg-zinc-900 hover:text-white transition-colors w-full" title="Logout">

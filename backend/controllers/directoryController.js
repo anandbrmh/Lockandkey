@@ -6,11 +6,10 @@ import { deleteFromImageKit } from "../services/storageService.js";
 // Helper: map Staff doc to standardized person shape for directory & handover
 export const mapStaffToPerson = (s) => {
   if (!s) return null;
-  const photo = s.photo?.url
-    ? s.photo
-    : s.imageUrl
-      ? { url: s.imageUrl, fileId: s.imageFileId || undefined, uploadedAt: s.updatedAt || s.createdAt }
-      : null;
+  const photo = s.photo?.url ? s.photo : null;
+  const userObj = s.user && typeof s.user === 'object' ? s.user : null;
+  const userRole = userObj?.role || s.userRole || null;
+  const isSubAdmin = userRole === 'subadmin';
   return {
     _id: s._id,
     name: s.name,
@@ -22,11 +21,15 @@ export const mapStaffToPerson = (s) => {
     roleTitle: s.roleTitle,
     phone: s.phone,
     photo,
-    imageUrl: s.imageUrl,
     isStaff: true,
+    isSubAdmin,
+    userRole,
     staffId: s._id,
-    userId: s.user,
+    userId: userObj?._id || s.user,
+    user: userObj || s.user,
     profileCompleted: s.profileCompleted,
+    adminCodeVerified: !!s.adminCodeVerified,
+    verifiedAdminCode: s.verifiedAdminCode || null,
     usageCount: 1,
     lastUsedAt: s.updatedAt || s.createdAt,
     createdAt: s.createdAt,
@@ -78,12 +81,15 @@ export const syncDirectoryFromRecords = async (userId = null) => {
 
 export const listSavedPersons = async (req, res, next) => {
   try {
-    const { search = "", page = 1, limit = 20 } = req.query;
+    const { search = "", page = 1, limit = 20, verified, adminCodeVerified } = req.query;
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
     const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 20));
     const skip = (pageNum - 1) * limitNum;
 
     const filter = {};
+    // Verified-only filter for admin handover: ?verified=true or ?adminCodeVerified=true
+    const verifiedOnly = String(verified).toLowerCase() === 'true' || String(adminCodeVerified).toLowerCase() === 'true';
+    if (verifiedOnly) filter.adminCodeVerified = true;
     if (search) {
       const regex = { $regex: search, $options: "i" };
       filter.$or = [
@@ -98,7 +104,7 @@ export const listSavedPersons = async (req, res, next) => {
     }
 
     const [records, total] = await Promise.all([
-      Staff.find(filter).sort("-updatedAt").skip(skip).limit(limitNum).lean(),
+      Staff.find(filter).populate("user", "name email role adminCode").sort("-updatedAt").skip(skip).limit(limitNum).lean(),
       Staff.countDocuments(filter),
     ]);
 
@@ -116,7 +122,7 @@ export const listSavedPersons = async (req, res, next) => {
 
 export const getSavedPerson = async (req, res, next) => {
   try {
-    const staff = await Staff.findById(req.params.id).lean();
+    const staff = await Staff.findById(req.params.id).populate("user", "name email role adminCode").lean();
     if (!staff) return res.status(404).json({ success: false, message: "Staff member not found" });
     res.json({ success: true, data: mapStaffToPerson(staff) });
   } catch (err) { next(err); }

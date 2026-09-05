@@ -60,7 +60,7 @@ export const safeDeleteFromImageKit = async (fileId, excludeRecordId = null) => 
 
     const [recordRef, staffRef, locationRef] = await Promise.all([
       LockKeyRecord.countDocuments({ ...fileIdQuery, isDeleted: false }),
-      Staff.countDocuments({ $or: [{ "photo.fileId": fileId }, { imageFileId: fileId }] }),
+      Staff.countDocuments({ "photo.fileId": fileId }),
       SavedLocation.countDocuments({ "photo.fileId": fileId }),
     ]);
 

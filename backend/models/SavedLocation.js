@@ -21,11 +21,11 @@ const savedLocationSchema = new mongoose.Schema(
     usageCount: { type: Number, default: 1 },
     lastUsedAt: { type: Date, default: Date.now },
   },
-  { timestamps: true }
+  { timestamps: true }  
 );
 
 savedLocationSchema.index({ createdBy: 1, updatedAt: -1 });
-savedLocationSchema.index({ label: "text" });
+savedLocationSchema.index({ label: "text" });  
 savedLocationSchema.index({ lat: 1, lng: 1 });
 
 const SavedLocation = mongoose.model("SavedLocation", savedLocationSchema);

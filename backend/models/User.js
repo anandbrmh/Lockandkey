@@ -12,7 +12,9 @@ const userSchema = new mongoose.Schema(
       trim: true,
     },
     passwordHash: { type: String, required: true },
-    role: { type: String, enum: ["admin", "staff"], default: "staff" },
+    role: { type: String, enum: ["admin", "staff", "subadmin"], default: "staff" },
+    // 4-digit admin code — plain text, not hashed, optional at register, set via settings
+    adminCode: { type: String, trim: true, default: null, validate: { validator: (v) => !v || /^\d{4}$/.test(v), message: "adminCode must be 4 digits" } },
   },
   { timestamps: { createdAt: "createdAt", updatedAt: "updatedAt" } }
 );

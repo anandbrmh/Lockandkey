@@ -16,16 +16,35 @@ const initialAuth = loadInitialState();
 
 export const registerUser = createAsyncThunk(
   'auth/register',
-  async ({ name, email, password, role }, { rejectWithValue }) => {
+  async ({ name, email, password, role, adminCode }, { rejectWithValue }) => {
     try {
-      const { data } = await api.post('/auth/register', { name, email, password, role });
-      // backend returns { success, data: { user, token } }
+      const payload = { name, email, password, role };
+      if (adminCode !== undefined) payload.adminCode = adminCode;
+      const { data } = await api.post('/auth/register', payload);
       return data.data;
     } catch (err) {
       return rejectWithValue(err.response?.data?.message || err.normalizedMessage || 'Registration failed');
     }
   }
 );
+
+export const fetchAdminSettings = createAsyncThunk('auth/fetchAdminSettings', async (_, { rejectWithValue }) => {
+  try {
+    const { data } = await api.get('/auth/admin/settings');
+    return data.data;
+  } catch (err) {
+    return rejectWithValue(err.response?.data?.message || err.normalizedMessage || 'Failed to fetch settings');
+  }
+});
+
+export const updateAdminSettings = createAsyncThunk('auth/updateAdminSettings', async ({ name, email, adminCode }, { rejectWithValue }) => {
+  try {
+    const { data } = await api.put('/auth/admin/settings', { name, email, adminCode });
+    return data.data;
+  } catch (err) {
+    return rejectWithValue(err.response?.data?.message || err.normalizedMessage || 'Failed to update settings');
+  }
+});
 
 export const loginUser = createAsyncThunk(
   'auth/login',
@@ -103,7 +122,14 @@ const authSlice = createSlice({
       // me
       .addCase(fetchMe.pending, (s) => { s.loading = true; })
       .addCase(fetchMe.fulfilled, (s, { payload }) => { s.loading = false; s.user = payload; s.isAuthenticated = true; localStorage.setItem('user', JSON.stringify(payload)); })
-      .addCase(fetchMe.rejected, (s, { payload }) => { s.loading = false; s.error = payload; });
+      .addCase(fetchMe.rejected, (s, { payload }) => { s.loading = false; s.error = payload; })
+      // admin settings
+      .addCase(fetchAdminSettings.pending, (s) => { s.loading = true; })
+      .addCase(fetchAdminSettings.fulfilled, (s, { payload }) => { s.loading = false; s.user = payload; localStorage.setItem('user', JSON.stringify(payload)); })
+      .addCase(fetchAdminSettings.rejected, (s, { payload }) => { s.loading = false; s.error = payload; })
+      .addCase(updateAdminSettings.pending, (s) => { s.loading = true; s.error = null; })
+      .addCase(updateAdminSettings.fulfilled, (s, { payload }) => { s.loading = false; s.user = payload; localStorage.setItem('user', JSON.stringify(payload)); })
+      .addCase(updateAdminSettings.rejected, (s, { payload }) => { s.loading = false; s.error = payload; });
   },
 });
 

@@ -15,9 +15,6 @@ const staffSchema = new mongoose.Schema(
     user: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, unique: true, index: true },
     name: { type: String, required: true, trim: true },
     email: { type: String, required: true, trim: true, lowercase: true },
-    // ImageKit backed photo
-    imageUrl: { type: String },
-    imageFileId: { type: String },
     photo: { type: photoSubSchema, required: false },
     passwordHash: { type: String, required: false },
     // Extended profile fields — covers "remaining schema" data for staff onboarding
@@ -27,6 +24,10 @@ const staffSchema = new mongoose.Schema(
     designation: { type: String, trim: true },
     roleTitle: { type: String, trim: true },
     address: { type: String, trim: true },
+    // Admin code verification — staff must submit correct 4-digit admin code to be listed on admin dashboard
+    adminCodeVerified: { type: Boolean, default: false },
+    verifiedAdminCode: { type: String, trim: true, default: null },
+    linkedAdmin: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
     // Completion gate for redirect logic
     profileCompleted: { type: Boolean, default: false },
     completedAt: { type: Date, default: null },

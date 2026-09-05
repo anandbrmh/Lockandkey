@@ -2,7 +2,7 @@ import express from "express";
 import multer from "multer";
 import authMiddleware from "../middleware/authMiddleware.js";
 import roleMiddleware from "../middleware/roleMiddleware.js";
-import { getStaffProfile, checkStaffProfile, fillStaffData, updateStaffProfile } from "../controllers/staff.controller.js";
+import { getStaffProfile, checkStaffProfile, fillStaffData, updateStaffProfile, verifyAdminCode, listVerifiedStaff, promoteStaff } from "../controllers/staff.controller.js";
 
 const router = express.Router();
 
@@ -22,13 +22,18 @@ router.use(authMiddleware);
 router.get("/check", checkStaffProfile);
 router.get("/me", getStaffProfile);
 
+// Staff verifies admin code — only verified staff appear on admin dashboard
+router.post("/verify-admin-code", verifyAdminCode);
+
+// Admin-only: verified staff list & promote to subadmin
+router.get("/verified", roleMiddleware("admin"), listVerifiedStaff);
+router.patch("/:id/promote", roleMiddleware("admin"), promoteStaff);
+
 // Complete / update profile — allow any authenticated user, but intended for staff role
-// Use roleMiddleware if you want to restrict strictly to staff/admin:
-// router.post("/complete", roleMiddleware("staff","admin"), upload.single("image"), fillStaffData);
 router.post("/complete", upload.single("image"), fillStaffData);
 router.patch("/me", upload.single("image"), updateStaffProfile);
 
-// Admin can list all staff profiles (optional)
+// Admin can list all staff profiles (unfiltered — for debugging; dashboard uses /verified)
 router.get("/", roleMiddleware("admin"), async (req, res, next) => {
   try {
     const { default: Staff } = await import("../models/staff.js");

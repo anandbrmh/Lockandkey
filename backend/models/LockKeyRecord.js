@@ -13,7 +13,7 @@ const lockKeyRecordSchema = new mongoose.Schema(
   {
     lockPhoto: { type: photoSubSchema, required: false },
     keyPhoto: { type: photoSubSchema, required: false },
-    keyCount: { type: Number, required: false, default: 1, min: 1 },
+    keyCount: { type: Number, required: false, default: 1, min: 1 }, 
     placementPhoto: { type: photoSubSchema, required: false },
     handoverPersons: [
       {

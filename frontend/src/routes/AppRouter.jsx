@@ -10,6 +10,8 @@ import RegisterPage from '../pages/RegisterPage';
 import StaffOnboardingPage from '../pages/StaffOnboardingPage';
 import StaffDirectoryPage from '../pages/StaffDirectoryPage';
 import LocksDirectoryPage from '../pages/LocksDirectoryPage';
+import AdminSettingsPage from '../pages/AdminSettingsPage';
+import AdminStaffDashboard from '../pages/AdminStaffDashboard';
 import { motion, AnimatePresence } from 'framer-motion';
 
 // Page Transition wrapper component
@@ -57,7 +59,7 @@ const AnimatedRoutes = () => {
         <Route
           path="/wizard"
           element={
-            <ProtectedRoute requireStaffComplete>
+            <ProtectedRoute requireStaffComplete requireAdminOrSubadmin>
               <PageWrapper>
                 <WizardPage />
               </PageWrapper>
@@ -67,9 +69,29 @@ const AnimatedRoutes = () => {
         <Route
           path="/wizard/edit/:id"
           element={
-            <ProtectedRoute requireStaffComplete>
+            <ProtectedRoute requireStaffComplete requireAdminOrSubadmin>
               <PageWrapper>
                 <WizardPage />
+              </PageWrapper>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/settings"
+          element={
+            <ProtectedRoute requireAdmin>
+              <PageWrapper>
+                <AdminSettingsPage />
+              </PageWrapper>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/staff"
+          element={
+            <ProtectedRoute requireAdmin>
+              <PageWrapper>
+                <AdminStaffDashboard />
               </PageWrapper>
             </ProtectedRoute>
           }

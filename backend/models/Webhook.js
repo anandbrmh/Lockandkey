@@ -17,7 +17,7 @@ const webhookSchema = new mongoose.Schema(
         "record.created",
         "record.updated",
         "record.deleted",
-        "record.status_changed",
+        "record.status_changed",  
         "staff.created",
         "staff.updated",
         "*",

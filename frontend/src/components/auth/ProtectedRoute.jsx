@@ -4,7 +4,7 @@ import { Navigate } from 'react-router-dom';
 import { selectIsAuthenticated, selectCurrentUser } from '../../features/auth/authSlice';
 import { checkStaffProfile, selectStaff } from '../../features/staff/staffSlice';
 
-export default function ProtectedRoute({ children, requireStaffComplete = false, allowIncompleteStaff = false }) {
+export default function ProtectedRoute({ children, requireStaffComplete = false, allowIncompleteStaff = false, requireAdmin = false, requireAdminOrSubadmin = false }) {
   const isAuthenticated = useSelector(selectIsAuthenticated);
   const user = useSelector(selectCurrentUser);
   const { completed, checked, loading } = useSelector(selectStaff);
@@ -20,13 +20,18 @@ export default function ProtectedRoute({ children, requireStaffComplete = false,
     return <Navigate to="/login" replace />;
   }
 
+  if (requireAdmin && user?.role !== 'admin') {
+    return <Navigate to="/" replace />;
+  }
+  if (requireAdminOrSubadmin && !(user?.role === 'admin' || user?.role === 'subadmin')) {
+    return <Navigate to="/" replace />;
+  }
+
   // Staff gate: if user is staff and profile not completed, force to /staff/complete
-  // Except when allowIncompleteStaff is true (the onboarding page itself)
   if (user?.role === 'staff' && !allowIncompleteStaff && checked && !completed) {
     return <Navigate to="/staff/complete" replace />;
   }
 
-  // Optional: require staff completion for certain routes (wizard/history)
   if (requireStaffComplete && user?.role === 'staff' && checked && !completed) {
     return <Navigate to="/staff/complete" replace />;
   }

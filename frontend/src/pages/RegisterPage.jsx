@@ -2,20 +2,25 @@ import React, { useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { Link, useNavigate } from 'react-router-dom';
 import { registerUser, selectAuth } from '../features/auth/authSlice';
-import { KeyRound, Mail, Lock, User, AlertCircle } from 'lucide-react';
+import { KeyRound, Mail, Lock, User, AlertCircle, Shield } from 'lucide-react';
 
 export default function RegisterPage() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const { loading, error } = useSelector(selectAuth);
-  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'staff' });
+  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'staff', adminCode: '' });
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const result = await dispatch(registerUser(form));
+    // only send adminCode when role is admin and provided
+    const payload = { ...form };
+    if (payload.role !== 'admin') delete payload.adminCode;
+    if (payload.adminCode === '') delete payload.adminCode;
+    const result = await dispatch(registerUser(payload));
     if (result.meta.requestStatus === 'fulfilled') {
       const role = result.payload?.user?.role || form.role;
-      if (role === 'staff') navigate('/staff/complete');
+      if (role === 'admin') navigate('/admin/settings');
+      else if (role === 'staff') navigate('/staff/complete');
       else navigate('/wizard');
     }
   };
@@ -55,6 +60,13 @@ export default function RegisterPage() {
               <option value="admin">Admin</option>
             </select>
           </div>
+          {form.role === 'admin' && (
+            <div>
+              <label className="wire-label flex items-center gap-1"><Shield className="h-3 w-3" /> 4-digit Admin Code <span className="text-[10px] font-mono text-zinc-500">(optional, plain — not hashed)</span></label>
+              <input type="text" inputMode="numeric" pattern="\d{4}" maxLength={4} value={form.adminCode} onChange={(e)=>setForm({...form,adminCode:e.target.value.replace(/\D/g,'').slice(0,4)})} className="wire-input mt-1" placeholder="e.g. 1234" />
+              <p className="text-[11px] font-mono text-zinc-500 mt-1">Create a 4-digit code to share with staff. Staff must submit this to appear on your dashboard. Can also set later in Admin Settings.</p>
+            </div>
+          )}
           <button disabled={loading} className="w-full wire-btn wire-btn-primary">
             {loading ? 'Creating...' : 'Register'}
           </button>

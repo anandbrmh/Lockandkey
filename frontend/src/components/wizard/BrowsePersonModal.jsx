@@ -1,22 +1,27 @@
 import React, { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchSavedPersons, selectDirectory } from '../../features/directory/directorySlice';
-import { Search, Users, X, Check, User, Briefcase, Phone, Clock, Image as ImageIcon } from 'lucide-react';
+import { Search, Users, X, Check, User, Briefcase, Phone, Clock, Image as ImageIcon, BadgeCheck } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 export default function BrowsePersonModal({ open, onClose, onSelect }) {
   const dispatch = useDispatch();
   const { persons, loadingPersons } = useSelector(selectDirectory);
+  const currentUser = useSelector((s) => s.auth?.user);
+  const isAdmin = currentUser?.role === 'admin';
   const [search, setSearch] = useState('');
 
   useEffect(() => {
-    if (open) dispatch(fetchSavedPersons({ search: '', limit: 50 }));
-  }, [open, dispatch]);
+    if (open) dispatch(fetchSavedPersons({ search: '', limit: 50, verified: isAdmin ? true : undefined }));
+  }, [open, dispatch, isAdmin]);
 
   const handleSearch = (e) => {
     e.preventDefault();
-    dispatch(fetchSavedPersons({ search, limit: 50 }));
+    dispatch(fetchSavedPersons({ search, limit: 50, verified: isAdmin ? true : undefined }));
   };
+
+  // Admin sees only verified staff; client-side fallback filter
+  const displayPersons = isAdmin ? persons.filter(p => p.adminCodeVerified) : persons;
 
   if (!open) return null;
 
@@ -34,7 +39,8 @@ export default function BrowsePersonModal({ open, onClose, onSelect }) {
             <div className="h-9 w-9 rounded-xl bg-primary-600 flex items-center justify-center text-white"><Users className="h-5 w-5" /></div>
             <div>
               <h3 className="font-bold text-slate-800 dark:text-white">Select Staff Member (Handover)</h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400">Choose an onboarded staff member for key handover</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">{isAdmin ? 'Verified staff only — admin can handover only to verified staff' : 'Choose an onboarded staff member for key handover'}</p>
+              {isAdmin && <p className="text-[11px] font-mono text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-0.5 mt-1 inline-block">Verified staff filter active</p>}
             </div>
           </div>
           <button onClick={onClose} className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500"><X className="h-5 w-5" /></button>
@@ -56,16 +62,17 @@ export default function BrowsePersonModal({ open, onClose, onSelect }) {
         <div className="flex-1 overflow-auto p-4 space-y-3 bg-slate-50 dark:bg-slate-950/50">
           {loadingPersons ? (
             <div className="py-10 text-center text-sm text-slate-500">Loading staff directory...</div>
-          ) : persons.length === 0 ? (
+          ) : displayPersons.length === 0 ? (
             <div className="py-10 text-center">
               <ImageIcon className="h-8 w-8 mx-auto text-slate-300 mb-2" />
-              <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">No staff members found</p>
-              <p className="text-xs text-slate-400 mt-1">Onboard staff via staff onboarding to appear here.</p>
+              <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">{isAdmin ? 'No verified staff found' : 'No staff members found'}</p>
+              <p className="text-xs text-slate-400 mt-1">{isAdmin ? 'Only staff who submitted your 4-digit admin code appear here. Ask staff to verify via Staff Onboarding.' : 'Onboard staff via staff onboarding to appear here.'}</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {persons.map((p) => {
-                const imgUrl = p.photo?.url || p.imageUrl || null;
+              {displayPersons.map((p) => {
+                const imgUrl = p.photo?.url || null;
+                const isSubAdmin = !!(p.isSubAdmin || p.userRole === 'subadmin' || p.user?.role === 'subadmin');
                 return (
                   <button
                     key={p._id}
@@ -83,7 +90,8 @@ export default function BrowsePersonModal({ open, onClose, onSelect }) {
                     <div className="flex-1 min-w-0">
                       <p className="font-bold text-sm text-slate-800 dark:text-slate-100 truncate flex items-center gap-1">
                         {p.name}
-                        <span className="text-[10px] bg-zinc-900 text-white px-1.5 py-0.5 rounded-full">Staff</span>
+                        {isSubAdmin ? <BadgeCheck className="h-4 w-4 text-blue-600 fill-blue-600 text-white" title="Sub-admin" /> : <span className="text-[10px] bg-zinc-900 text-white px-1.5 py-0.5 rounded-full">Staff</span>}
+                        {isSubAdmin && <span className="text-[10px] bg-blue-600 text-white px-1.5 py-0.5 rounded-full">Sub-admin</span>}
                       </p>
                       <p className="text-xs text-slate-500 dark:text-slate-400 truncate flex items-center gap-1">
                         <Briefcase className="h-3 w-3" />
@@ -107,7 +115,7 @@ export default function BrowsePersonModal({ open, onClose, onSelect }) {
           )}
         </div>
         <div className="p-3 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 text-center">
-          <p className="text-[11px] text-slate-500 dark:text-slate-400">Select a staff member to auto-fill their profile & handover photo.</p>
+          <p className="text-[11px] text-slate-500 dark:text-slate-400">{isAdmin ? 'Admin: only verified staff can be selected for handover.' : 'Select a staff member to auto-fill their profile & handover photo.'}</p>
         </div>
       </motion.div>
     </div>

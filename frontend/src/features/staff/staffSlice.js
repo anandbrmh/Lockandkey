@@ -30,6 +30,33 @@ export const completeStaffProfile = createAsyncThunk('staff/complete', async (fo
   }
 });
 
+export const verifyAdminCode = createAsyncThunk('staff/verifyAdminCode', async ({ adminCode }, { rejectWithValue }) => {
+  try {
+    const { data } = await api.post('/staff/verify-admin-code', { adminCode });
+    return data;
+  } catch (err) {
+    return rejectWithValue(err.response?.data?.message || err.normalizedMessage || 'Verification failed');
+  }
+});
+
+export const fetchVerifiedStaff = createAsyncThunk('staff/fetchVerified', async (_, { rejectWithValue }) => {
+  try {
+    const { data } = await api.get('/staff/verified');
+    return data.data;
+  } catch (err) {
+    return rejectWithValue(err.response?.data?.message || err.normalizedMessage || 'Failed to fetch verified staff');
+  }
+});
+
+export const promoteStaff = createAsyncThunk('staff/promote', async ({ staffId, role }, { rejectWithValue }) => {
+  try {
+    const { data } = await api.patch(`/staff/${staffId}/promote`, { role });
+    return data;
+  } catch (err) {
+    return rejectWithValue(err.response?.data?.message || err.normalizedMessage || 'Promotion failed');
+  }
+});
+
 const staffSlice = createSlice({
   name: 'staff',
   initialState: {
@@ -40,6 +67,9 @@ const staffSlice = createSlice({
     saving: false,
     error: null,
     checked: false,
+    verifiedStaff: [],
+    verifying: false,
+    promoting: false,
   },
   reducers: {
     clearStaffError(state) { state.error = null; },
@@ -74,7 +104,16 @@ const staffSlice = createSlice({
         s.exists = true;
         s.checked = true;
       })
-      .addCase(completeStaffProfile.rejected, (s, { payload }) => { s.saving = false; s.error = payload; });
+      .addCase(completeStaffProfile.rejected, (s, { payload }) => { s.saving = false; s.error = payload; })
+      .addCase(verifyAdminCode.pending, (s) => { s.verifying = true; s.error = null; })
+      .addCase(verifyAdminCode.fulfilled, (s, { payload }) => { s.verifying = false; s.profile = payload.data; })
+      .addCase(verifyAdminCode.rejected, (s, { payload }) => { s.verifying = false; s.error = payload; })
+      .addCase(fetchVerifiedStaff.pending, (s) => { s.loading = true; })
+      .addCase(fetchVerifiedStaff.fulfilled, (s, { payload }) => { s.loading = false; s.verifiedStaff = payload; })
+      .addCase(fetchVerifiedStaff.rejected, (s, { payload }) => { s.loading = false; s.error = payload; })
+      .addCase(promoteStaff.pending, (s) => { s.promoting = true; s.error = null; })
+      .addCase(promoteStaff.fulfilled, (s) => { s.promoting = false; })
+      .addCase(promoteStaff.rejected, (s, { payload }) => { s.promoting = false; s.error = payload; });
   },
 });
 
