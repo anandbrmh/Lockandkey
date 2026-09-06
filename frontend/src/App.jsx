@@ -5,7 +5,7 @@ import AppRouter from './routes/AppRouter';
 import { initializeTheme } from './features/theme/themeSlice';
 import './App.css';
 import { useOfflineSync } from './hooks/useOfflineSync';
-import { fetchMe, selectIsAuthenticated } from './features/auth/authSlice';
+import { fetchMe, selectIsAuthenticated, logout } from './features/auth/authSlice';
 
 // AppInitializer sets up themes and global auth listeners
 function AppInitializer({ children }) {
@@ -16,8 +16,7 @@ function AppInitializer({ children }) {
   useEffect(() => {
     dispatch(initializeTheme());
     const handler = () => {
-      // auto-logout on 401 from api interceptor
-      import('./features/auth/authSlice').then(({ logout }) => dispatch(logout()));
+      dispatch(logout());
     };
     window.addEventListener('auth:unauthorized', handler);
     return () => window.removeEventListener('auth:unauthorized', handler);
