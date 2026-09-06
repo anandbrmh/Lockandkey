@@ -44,8 +44,6 @@ const corsOptions =
         allowedHeaders: ["Content-Type","Authorization","X-Requested-With","X-Signature","X-Webhook-Event","X-Webhook-Id","X-Webhook-Owner"],
       };
 app.use(cors(corsOptions));
-// handle preflight
-app.options("*", cors(corsOptions));
 app.use(morgan("dev"));
 
 // Capture rawBody for webhook HMAC verification (used by incoming-webhooks)
