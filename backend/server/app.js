@@ -19,14 +19,33 @@ dotenv.config();
 const app = express();
 
 // ── Security & logging middleware — MUST be before routes ──
-app.use(helmet());
-// CORS: allow VITE origin + credentials. If CORS_ORIGIN=* we disable credentials for wildcard.
+app.use(helmet({
+  crossOriginEmbedderPolicy: false,
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+}));
+// CORS: allow localhost + Vercel frontend (including preview *.vercel.app) + Render backend
+// Env: CORS_ORIGIN=http://localhost:5173,http://localhost:3000,https://lockandkey-puce.vercel.app,https://lockandkey-a5iy.onrender.com
 const corsOrigin = process.env.CORS_ORIGIN || "*";
+const allowedOrigins = corsOrigin === "*" ? "*" : corsOrigin.split(",").map((s) => s.trim()).filter(Boolean);
 const corsOptions =
   corsOrigin === "*"
-    ? { origin: "*", credentials: false }
-    : { origin: corsOrigin.split(",").map((s) => s.trim()), credentials: true };
+    ? { origin: "*", credentials: false, methods: ["GET","POST","PUT","PATCH","DELETE","OPTIONS"], allowedHeaders: ["Content-Type","Authorization","X-Requested-With","X-Signature","X-Webhook-Event","X-Webhook-Id"] }
+    : {
+        origin: (origin, callback) => {
+          // allow non-browser requests (curl, mobile) with no origin
+          if (!origin) return callback(null, true);
+          // allow exact matches + any *.vercel.app preview deployments
+          const isAllowed = allowedOrigins.includes(origin) || origin.endsWith(".vercel.app") || origin.endsWith(".onrender.com");
+          if (isAllowed) return callback(null, true);
+          return callback(null, false);
+        },
+        credentials: true,
+        methods: ["GET","POST","PUT","PATCH","DELETE","OPTIONS"],
+        allowedHeaders: ["Content-Type","Authorization","X-Requested-With","X-Signature","X-Webhook-Event","X-Webhook-Id","X-Webhook-Owner"],
+      };
 app.use(cors(corsOptions));
+// handle preflight
+app.options("*", cors(corsOptions));
 app.use(morgan("dev"));
 
 // Capture rawBody for webhook HMAC verification (used by incoming-webhooks)
