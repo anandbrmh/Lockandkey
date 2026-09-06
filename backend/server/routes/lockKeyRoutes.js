@@ -35,6 +35,6 @@ router.patch("/:id/placement-photo", authMiddleware, uploadPlacementPhoto, updat
 // Single record
 router.get("/:id", authMiddleware, getRecord);
 router.patch("/:id", authMiddleware, uploadFields, validateUpdateRecord, updateRecord);
-router.delete("/:id", authMiddleware, roleMiddleware("admin"), deleteRecord);
+router.delete("/:id", authMiddleware, roleMiddleware("admin", "subadmin"), deleteRecord);
 
 export default router;

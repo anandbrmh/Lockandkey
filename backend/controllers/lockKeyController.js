@@ -4,6 +4,40 @@ import Staff from "../models/staff.js";
 import { uploadToImageKit, deleteFilesForRecord, getImageKitAuthParams } from "../services/storageService.js";
 import { upsertSavedLocation } from "./directoryController.js";
 import triggerEvent from "../../services/dispatcher.js";
+import User from "../models/User.js";
+
+const isAdmin = (user) => user?.role === "admin";
+const buildOwnerFilter = (user) => {
+  if (isAdmin(user)) return { isDeleted: false }; // fallback, async path preferred for admin isolation
+  return { isDeleted: false, $or: [{ ownerId: user._id }, { createdBy: user._id }] };
+};
+const buildSingleFilter = (id, user) => {
+  const base = { _id: id, isDeleted: false };
+  if (!isAdmin(user)) base.$or = [{ ownerId: user._id }, { createdBy: user._id }];
+  return base;
+};
+const getLinkedSubadminIds = async (adminUser) => {
+  if (!isAdmin(adminUser)) return [];
+  const or = [{ linkedAdmin: adminUser._id }];
+  if (adminUser.adminCode) or.push({ verifiedAdminCode: adminUser.adminCode });
+  const linkedStaff = await Staff.find({ adminCodeVerified: true, $or: or }).select("user").lean();
+  const userIds = linkedStaff.map((s) => s.user).filter(Boolean);
+  if (!userIds.length) return [];
+  const subadminUsers = await User.find({ _id: { $in: userIds }, role: "subadmin" }).select("_id").lean();
+  return subadminUsers.map((u) => u._id);
+};
+const getAdminMergedFilter = async (user) => {
+  if (!isAdmin(user)) return buildOwnerFilter(user);
+  const linkedSubadminIds = await getLinkedSubadminIds(user);
+  const or = [{ ownerId: user._id }, { createdBy: user._id }];
+  if (linkedSubadminIds.length) or.push({ ownerId: { $in: linkedSubadminIds } }, { createdBy: { $in: linkedSubadminIds } });
+  return { isDeleted: false, $or: or };
+};
+const getAdminSingleFilter = async (id, user) => {
+  if (!isAdmin(user)) return buildSingleFilter(id, user);
+  const merged = await getAdminMergedFilter(user);
+  return { ...merged, _id: id };
+};
 
 // Helper: resolve staff person for handover (returns normalized data)
 const resolveStaffForHandover = async (staffId) => {
@@ -254,21 +288,43 @@ export const createRecord = async (req, res, next) => {
   }
 };
 
-// GET /api/lock-key-records — list with pagination & filters (isolated per user)
+// GET /api/lock-key-records — list with pagination & filters (admin: own+subadmin isolated from peer admins)
 export const listRecords = async (req, res, next) => {
   try {
-    const { page = 1, limit = 10, status, startDate, endDate, handoverName, sort = "-createdAt" } = req.query;
+    const { page = 1, limit = 10, status, startDate, endDate, handoverName, sort = "-createdAt", ownerRole, ownerId: ownerIdQuery } = req.query;
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
     const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 10));
     const skip = (pageNum - 1) * limitNum;
 
-    const filter = { isDeleted: false, $or: [{ ownerId: req.user._id }, { createdBy: req.user._id }] };
+    let filter = isAdmin(req.user) ? await getAdminMergedFilter(req.user) : buildOwnerFilter(req.user);
     if (status) filter.status = status;
     if (handoverName) filter["handoverPersons.name"] = { $regex: handoverName, $options: "i" };
     if (startDate || endDate) {
       filter.createdAt = {};
       if (startDate) filter.createdAt.$gte = new Date(startDate);
       if (endDate) filter.createdAt.$lte = new Date(endDate);
+    }
+    if (isAdmin(req.user) && ownerRole && ["admin", "subadmin"].includes(ownerRole)) {
+      if (ownerRole === "admin") {
+        filter = { isDeleted: false, $or: [{ ownerId: req.user._id }, { createdBy: req.user._id }] };
+      } else {
+        const linkedSubadminIds = await getLinkedSubadminIds(req.user);
+        if (linkedSubadminIds.length === 0) filter = { isDeleted: false, _id: { $in: [] } };
+        else filter = { isDeleted: false, $or: [{ ownerId: { $in: linkedSubadminIds } }, { createdBy: { $in: linkedSubadminIds } }] };
+      }
+      if (status) filter.status = status;
+      if (handoverName) filter["handoverPersons.name"] = { $regex: handoverName, $options: "i" };
+      if (startDate || endDate) {
+        filter.createdAt = {};
+        if (startDate) filter.createdAt.$gte = new Date(startDate);
+        if (endDate) filter.createdAt.$lte = new Date(endDate);
+      }
+    }
+    if (isAdmin(req.user) && ownerIdQuery) {
+      const linkedSubadminIds = await getLinkedSubadminIds(req.user);
+      const allowed = [String(req.user._id), ...linkedSubadminIds.map(String)];
+      if (!allowed.includes(String(ownerIdQuery))) filter = { isDeleted: false, _id: { $in: [] } };
+      else filter = { isDeleted: false, $or: [{ ownerId: ownerIdQuery }, { createdBy: ownerIdQuery }] };
     }
 
     const [recordsRaw, total] = await Promise.all([
@@ -299,10 +355,10 @@ export const listRecords = async (req, res, next) => {
   }
 };
 
-// GET /api/lock-key-records/:id (owner only)
+// GET /api/lock-key-records/:id — admin can view own+subadmin only (not peer admin)
 export const getRecord = async (req, res, next) => {
   try {
-    const record = await LockKeyRecord.findOne({ _id: req.params.id, isDeleted: false, $or: [{ ownerId: req.user._id }, { createdBy: req.user._id }] }).populate("ownerId", "name email role");
+    const record = await LockKeyRecord.findOne(await getAdminSingleFilter(req.params.id, req.user)).populate("ownerId", "name email role");
     if (!record) return res.status(404).json({ success: false, message: "Record not found" });
     res.json({ success: true, data: record });
   } catch (err) {
@@ -310,10 +366,10 @@ export const getRecord = async (req, res, next) => {
   }
 };
 
-// PATCH /api/lock-key-records/:id — update metadata/status (owner only)
+// PATCH /api/lock-key-records/:id — owner or admin (own+subadmin)
 export const updateRecord = async (req, res, next) => {
   try {
-    const record = await LockKeyRecord.findOne({ _id: req.params.id, isDeleted: false, $or: [{ ownerId: req.user._id }, { createdBy: req.user._id }] });
+    const record = await LockKeyRecord.findOne(await getAdminSingleFilter(req.params.id, req.user));
     if (!record) return res.status(404).json({ success: false, message: "Record not found" });
 
     const { keyCount, handoverName, handoverRole, handoverContact, lat, lng, status, handoverPersons: handoverPersonsRaw } = req.body;
@@ -455,14 +511,14 @@ export const updateRecord = async (req, res, next) => {
   }
 };
 
-// PATCH /api/lock-key-records/:id/person-photo/:personIndex — update per-person photo
+// PATCH /api/lock-key-records/:id/person-photo/:personIndex — owner or admin
 export const updatePersonPhoto = async (req, res, next) => {
   try {
     const { id, personIndex } = req.params;
     const personIdx = parseInt(personIndex, 10);
     if (isNaN(personIdx) || personIdx < 0) return res.status(400).json({ success: false, message: "Invalid person index" });
     
-    const record = await LockKeyRecord.findOne({ _id: id, isDeleted: false, $or: [{ ownerId: req.user._id }, { createdBy: req.user._id }] });
+    const record = await LockKeyRecord.findOne(await getAdminSingleFilter(id, req.user));
     if (!record) return res.status(404).json({ success: false, message: "Record not found" });
     
     const file = req.file || req.files?.personPhoto?.[0];
@@ -490,10 +546,10 @@ export const updatePersonPhoto = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-// PATCH /api/lock-key-records/:id/placement-photo — owner only
+// PATCH /api/lock-key-records/:id/placement-photo — owner or admin (own+subadmin)
 export const updatePlacementPhoto = async (req, res, next) => {
   try {
-    const record = await LockKeyRecord.findOne({ _id: req.params.id, isDeleted: false, $or: [{ ownerId: req.user._id }, { createdBy: req.user._id }] });
+    const record = await LockKeyRecord.findOne(await getAdminSingleFilter(req.params.id, req.user));
     if (!record) return res.status(404).json({ success: false, message: "Record not found" });
     const file = req.file || req.files?.placementPhoto?.[0];
     if (!file) return res.status(400).json({ success: false, message: "placementPhoto file is required (field: placementPhoto)" });
@@ -512,12 +568,12 @@ export const updatePlacementPhoto = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-// DELETE /api/lock-key-records/:id — owner or admin, soft delete
+// DELETE /api/lock-key-records/:id — admin can delete own+subadmin (not peer admin), subadmin own
 export const deleteRecord = async (req, res, next) => {
   try {
-    // Allow owner or admin to delete; admin can delete any record, otherwise must own it
-    const baseFilter = { _id: req.params.id, isDeleted: false };
-    if (req.user.role !== "admin") baseFilter.$or = [{ ownerId: req.user._id }, { createdBy: req.user._id }];
+    let baseFilter;
+    if (isAdmin(req.user)) baseFilter = await getAdminSingleFilter(req.params.id, req.user);
+    else { baseFilter = { _id: req.params.id, isDeleted: false, $or: [{ ownerId: req.user._id }, { createdBy: req.user._id }] }; }
     const record = await LockKeyRecord.findOne(baseFilter);
     if (!record) return res.status(404).json({ success: false, message: "Record not found" });
 
@@ -622,14 +678,14 @@ export const getMyAssignedStats = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-// GET /api/lock-key-records/stats/summary — dashboard stats (isolated per user)
+// GET /api/lock-key-records/stats/summary — dashboard stats (admin: own+subadmin isolated from peer admins)
 export const getStats = async (req, res, next) => {
   try {
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
     const todayEnd = new Date();
     todayEnd.setHours(23, 59, 59, 999);
-    const ownerFilter = { isDeleted: false, $or: [{ ownerId: req.user._id }, { createdBy: req.user._id }] };
+    const ownerFilter = isAdmin(req.user) ? await getAdminMergedFilter(req.user) : buildOwnerFilter(req.user);
 
     const [totalActive, totalReturned, totalLost, totalAll, keysTodayAgg, topRecipients, recentRecords] = await Promise.all([
       LockKeyRecord.countDocuments({ ...ownerFilter, status: "active" }),
@@ -674,7 +730,7 @@ export const getStats = async (req, res, next) => {
 
 export async function getlockandkeycounts(req, res, next) {
   try {
-    const ownerFilter = { isDeleted: false, $or: [{ ownerId: req.user._id }, { createdBy: req.user._id }] };  
+    const ownerFilter = isAdmin(req.user) ? await getAdminMergedFilter(req.user) : buildOwnerFilter(req.user);  
 
 
     const [totalActive, totalReturned, totalLost, totalAll] = await Promise.all([
@@ -702,7 +758,7 @@ export async function getlockandkeycounts(req, res, next) {
 export async function specificlockandkey(req, res, next) {
   try {
     const { id } = req.params;
-    const record = await LockKeyRecord.findOne({ _id: id, isDeleted: false, $or: [{ ownerId: req.user._id }, { createdBy: req.user._id }] }).populate("ownerId", "name email role");
+    const record = await LockKeyRecord.findOne(await getAdminSingleFilter(id, req.user)).populate("ownerId", "name email role");
     if (!record) return res.status(404).json({ success: false, message: "Record not found" });
     res.status(200).json({
       success: true,
@@ -716,7 +772,7 @@ export async function specificlockandkey(req, res, next) {
 export async function getlock(req, res, next) {
   try {
     const { id } = req.params;
-    const record = await LockKeyRecord.findOne({ _id: id, isDeleted: false, $or: [{ ownerId: req.user._id }, { createdBy: req.user._id }] }).populate("ownerId", "name email role");
+    const record = await LockKeyRecord.findOne(await getAdminSingleFilter(id, req.user)).populate("ownerId", "name email role");
     if (!record) return res.status(404).json({ success: false, message: "Record not found" });
     res.status(200).json({
       success: true,
@@ -730,7 +786,7 @@ export async function getlock(req, res, next) {
 export async function getkey(req, res, next) {
   try {
     const { id } = req.params;
-    const record = await LockKeyRecord.findOne({ _id: id, isDeleted: false, $or: [{ ownerId: req.user._id }, { createdBy: req.user._id }] }).populate("ownerId", "name email role");
+    const record = await LockKeyRecord.findOne(await getAdminSingleFilter(id, req.user)).populate("ownerId", "name email role");
     if (!record) return res.status(404).json({ success: false, message: "Record not found" });
     res.status(200).json({
       success: true,
@@ -744,7 +800,7 @@ export async function getkey(req, res, next) {
 export async function gethandover(req, res, next) {
   try {
     const { id } = req.params;
-    const record = await LockKeyRecord.findOne({ _id: id, isDeleted: false, $or: [{ ownerId: req.user._id }, { createdBy: req.user._id }] }).populate("ownerId", "name email role");
+    const record = await LockKeyRecord.findOne(await getAdminSingleFilter(id, req.user)).populate("ownerId", "name email role");
     if (!record) return res.status(404).json({ success: false, message: "Record not found" });
     const firstPersonPhoto = record.handoverPersons?.[0]?.photo || null;
     res.status(200).json({
@@ -759,7 +815,7 @@ export async function gethandover(req, res, next) {
 export async function getplacement(req, res, next) {
   try {
     const { id } = req.params;
-    const record = await LockKeyRecord.findOne({ _id: id, isDeleted: false, $or: [{ ownerId: req.user._id }, { createdBy: req.user._id }] }).populate("ownerId", "name email role");
+    const record = await LockKeyRecord.findOne(await getAdminSingleFilter(id, req.user)).populate("ownerId", "name email role");
     if (!record) return res.status(404).json({ success: false, message: "Record not found" });
     res.status(200).json({
       success: true,

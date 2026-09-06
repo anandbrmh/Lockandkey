@@ -3,7 +3,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import { fetchRecords, deleteRecord, updateRecord, updatePlacementPhoto, updatePersonPhoto, selectRecordsState } from '../features/records/recordsSlice';
 import { selectCurrentUser } from '../features/auth/authSlice';
-import { Calendar, Search, Key, ChevronDown, ChevronUp, Clock, Briefcase, Trash2, AlertCircle, Filter, RefreshCw, ImagePlus, Pencil, Save, X, User, Users } from 'lucide-react';
+import { Calendar, Search, Key, ChevronDown, ChevronUp, Clock, Briefcase, Trash2, AlertCircle, Filter, RefreshCw, ImagePlus, Pencil, Save, X, User, Users, Shield } from 'lucide-react';
 
 import { filterHandoverPersonsForDisplay } from '../utils/validators';
 
@@ -36,8 +36,10 @@ export default function HistoryPage() {
   const navigate = useNavigate();
   const { records: rawRecords, loading, error, pagination } = useSelector(selectRecordsState);
   const currentUser = useSelector(selectCurrentUser);
+  const isAdmin = currentUser?.role === 'admin';
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [ownerFilter, setOwnerFilter] = useState('all'); // admin merged: all | admin | subadmin
   const [expandedRecord, setExpandedRecord] = useState(null);
   const [updatingId, setUpdatingId] = useState(null);
   const [editingId, setEditingId] = useState(null);
@@ -46,6 +48,16 @@ export default function HistoryPage() {
   const personPhotoInputRef = useRef(null);
   const [targetId, setTargetId] = useState(null);
   const [targetPerson, setTargetPerson] = useState(null);
+  const getOwnerRole = (rec) => {
+    const o = rec.ownerId || rec.createdBy;
+    if (o && typeof o === 'object' && o.role) return o.role;
+    return 'unknown';
+  };
+  const getOwnerName = (rec) => {
+    const o = rec.ownerId || rec.createdBy;
+    if (o && typeof o === 'object' && o.name) return o.name;
+    return '—';
+  };
 
   useEffect(() => { dispatch(fetchRecords({ page: 1, limit: 50 })); }, [dispatch]);
   useEffect(() => {
@@ -58,7 +70,27 @@ export default function HistoryPage() {
     return () => clearTimeout(t);
   }, [searchTerm, statusFilter, dispatch]);
 
-  const records = rawRecords.map(normalizeRecord);
+  const rawNormalized = rawRecords.map(normalizeRecord);
+  const ownerCounts = isAdmin ? {
+    admin: rawNormalized.filter(r => getOwnerRole(r) === 'admin').length,
+    subadmin: rawNormalized.filter(r => getOwnerRole(r) === 'subadmin').length,
+    total: rawNormalized.length,
+  } : null;
+  const records = rawNormalized.filter(r => {
+    if (!isAdmin || ownerFilter === 'all') return true;
+    return getOwnerRole(r) === ownerFilter;
+  });
+  const isSubadmin = currentUser?.role === 'subadmin';
+  const canDelete = (rec) => {
+    if (isAdmin) return true; // admin can delete any (merged dashboard)
+    if (isSubadmin) {
+      const oid = rec.ownerId || rec.createdBy;
+      const oidStr = (oid && typeof oid === 'object') ? (oid._id || oid.id || String(oid)) : oid;
+      const curId = currentUser?._id || currentUser?.id;
+      return String(oidStr) === String(curId);
+    }
+    return false;
+  };
   const handleDelete = async (id) => {
     if (!confirm('Delete this record?')) return;
     const result = await dispatch(deleteRecord(id));
@@ -118,13 +150,29 @@ export default function HistoryPage() {
       <input ref={placementInputRef} type="file" accept="image/*" className="hidden" onChange={onPlacementFile} />
       <input ref={personPhotoInputRef} type="file" accept="image/*" className="hidden" onChange={onPersonPhotoFile} />
 
-      {/* header */}
-      <div className="wire-card p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <h1 className="text-lg font-semibold">History</h1>
-          <p className="text-xs font-mono text-zinc-500">{pagination ? `${pagination.total} records` : 'Audit log'}</p>
+      {/* header — admin merged info */}
+      <div className="wire-card p-4 flex flex-col gap-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <h1 className="text-lg font-semibold flex items-center gap-2">History {isAdmin && <span className="text-[11px] font-mono bg-zinc-900 text-white rounded px-2 py-0.5">Merged — Admin + Subadmin</span>}</h1>
+            <p className="text-xs font-mono text-zinc-500">
+              {pagination ? `${pagination.total} records${isAdmin && ownerCounts ? ` · ${ownerCounts.admin} admin / ${ownerCounts.subadmin} subadmin` : ''}` : 'Audit log'}
+            </p>
+          </div>
+          <button onClick={() => dispatch(fetchRecords({ page: 1, limit: 50 }))} className="wire-btn text-xs"><RefreshCw className="h-3.5 w-3.5" /> Refresh</button>
         </div>
-        <button onClick={() => dispatch(fetchRecords({ page: 1, limit: 50 }))} className="wire-btn text-xs"><RefreshCw className="h-3.5 w-3.5" /> Refresh</button>
+        {isAdmin && ownerCounts && (
+          <div className="flex items-center gap-2 border-t border-zinc-100 pt-3 flex-wrap">
+            <span className="text-xs font-mono text-zinc-500 flex items-center gap-1"><Shield className="h-3 w-3" /> View:</span>
+            {[
+              { key: 'all', label: `All (${ownerCounts.total})` },
+              { key: 'admin', label: `Admin (${ownerCounts.admin})` },
+              { key: 'subadmin', label: `Subadmin (${ownerCounts.subadmin})` },
+            ].map(tab => (
+              <button key={tab.key} onClick={() => setOwnerFilter(tab.key)} className={`px-3 py-1.5 rounded-md border text-xs font-mono ${ownerFilter === tab.key ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white border-zinc-200 hover:border-zinc-900'}`}>{tab.label}</button>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="flex flex-col sm:flex-row gap-3">
@@ -163,6 +211,11 @@ export default function HistoryPage() {
                       <span className="text-[11px] font-mono border border-zinc-200 rounded px-1.5 py-0.5 bg-zinc-50">#{String(rec.id).slice(0,8)}</span>
                       <h3 className="text-sm font-semibold mt-1">{rec.handoverName}</h3>
                       <p className="text-xs font-mono text-zinc-500 flex items-center gap-1"><Briefcase className="h-3 w-3" /> {rec.handoverRole} · <span className="border border-zinc-200 rounded px-1 text-[11px]">{rec.status}</span></p>
+                      {isAdmin && (
+                        <span className={`inline-flex items-center gap-1 mt-1 text-[11px] font-mono font-bold px-2 py-0.5 rounded border ${getOwnerRole(rec) === 'subadmin' ? 'bg-amber-100 text-amber-800 border-amber-200' : getOwnerRole(rec) === 'admin' ? 'bg-violet-100 text-violet-800 border-violet-200' : 'bg-zinc-100 border-zinc-200'}`}>
+                          <Shield className="h-3 w-3" /> {getOwnerRole(rec).toUpperCase()} · {getOwnerName(rec)}
+                        </span>
+                      )}
                     </div>
                     <span className="h-fit border border-zinc-900 rounded-md px-2 py-1 text-xs font-mono bg-white">{rec.keyCount} keys</span>
                   </div>
@@ -253,7 +306,7 @@ export default function HistoryPage() {
                         </div>
                       </div>
                     )}
-                    {currentUser?.role === 'admin' && <button onClick={() => handleDelete(rec.id)} className="w-full border border-red-200 text-red-600 rounded-md py-2 text-xs font-mono hover:bg-red-50 flex items-center justify-center gap-1"><Trash2 className="h-3.5 w-3.5" /> Delete</button>}
+                    {canDelete(rec) && <button onClick={() => handleDelete(rec.id)} className="w-full border border-red-200 text-red-600 rounded-md py-2 text-xs font-mono hover:bg-red-50 flex items-center justify-center gap-1"><Trash2 className="h-3.5 w-3.5" /> Delete {isAdmin ? `(${getOwnerRole(rec)} lock)` : ''}</button>}
                   </div>
                 )}
 

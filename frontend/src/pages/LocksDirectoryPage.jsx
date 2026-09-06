@@ -1,9 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
-import { fetchRecords, selectRecordsState } from '../features/records/recordsSlice';
+import { fetchRecords, deleteRecord, selectRecordsState } from '../features/records/recordsSlice';
 import { filterHandoverPersonsForDisplay } from '../utils/validators';
-import { KeyRound, Search, MapPin, Calendar, Clock, User, Users, Pencil, X, Check, Shield, AlertCircle, PlusCircle } from 'lucide-react';
+import { KeyRound, Search, MapPin, Calendar, Clock, User, Users, Pencil, X, Shield, AlertCircle, PlusCircle, Filter, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { selectCurrentUser } from '../features/auth/authSlice';
 
@@ -13,52 +13,143 @@ export default function LocksDirectoryPage() {
   const { records = [], loading, error } = useSelector(selectRecordsState);
   const currentUser = useSelector(selectCurrentUser);
   const canSubmitRecord = currentUser?.role === 'admin' || currentUser?.role === 'subadmin';
+  const isAdmin = currentUser?.role === 'admin';
+  const isSubadmin = currentUser?.role === 'subadmin';
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedLock, setSelectedLock] = useState(null);
+  const [ownerFilter, setOwnerFilter] = useState('all'); // all | admin | subadmin  (admin only)
+  const [deletingId, setDeletingId] = useState(null);
 
   useEffect(() => {
     dispatch(fetchRecords({ page: 1, limit: 100 }));
   }, [dispatch]);
 
   const pickUrl = (v) => (typeof v === 'string' ? v : v?.url || null);
+  const getOwnerRole = (rec) => {
+    const o = rec.ownerId || rec.createdBy;
+    if (o && typeof o === 'object' && o.role) return o.role;
+    return 'unknown';
+  };
+  const getOwnerName = (rec) => {
+    const o = rec.ownerId || rec.createdBy;
+    if (o && typeof o === 'object' && o.name) return o.name;
+    if (typeof o === 'string') return o.slice(0,8);
+    return '—';
+  };
+  const canDelete = (rec) => {
+    if (isAdmin) return true; // admin (superadmin) can delete any — merged view
+    if (isSubadmin) {
+      const oid = rec.ownerId || rec.createdBy;
+      const oidStr = (oid && typeof oid === 'object') ? (oid._id || oid.id || String(oid)) : oid;
+      const curId = currentUser?._id || currentUser?.id;
+      return String(oidStr) === String(curId);
+    }
+    return false;
+  };
+  const handleDelete = async (rec) => {
+    const id = rec._id || rec.id;
+    const ownerRole = getOwnerRole(rec);
+    if (!confirm(`Delete this ${ownerRole} lock #${String(id).slice(0,8)} ?`)) return;
+    setDeletingId(id);
+    const result = await dispatch(deleteRecord(id));
+    setDeletingId(null);
+    if (result.meta.requestStatus === 'fulfilled') {
+      setSelectedLock(null);
+      dispatch(fetchRecords({ page: 1, limit: 100 }));
+    } else {
+      alert(result.payload || 'Delete failed');
+    }
+  };
 
-  const filteredRecords = records.filter(rec => {
-    if (!searchTerm) return true;
-    const q = searchTerm.toLowerCase();
-    const locLabel = rec.savedLocationLabel || (rec.location?.lat != null ? `${rec.location.lat}, ${rec.location.lng}` : '');
-    const persons = rec.handoverPersons || [];
-    const personNames = persons.map(p => p.name || '').join(' ');
-    const singleName = rec.handoverPersons?.[0]?.name || '';
+  const counts = useMemo(() => {
+    const admin = records.filter(r => getOwnerRole(r) === 'admin').length;
+    const subadmin = records.filter(r => getOwnerRole(r) === 'subadmin').length;
+    const other = records.length - admin - subadmin;
+    return { total: records.length, admin, subadmin, other };
+  }, [records]);
 
-    return (
-      String(rec._id || rec.id).toLowerCase().includes(q) ||
-      locLabel.toLowerCase().includes(q) ||
-      personNames.toLowerCase().includes(q) ||
-      singleName.toLowerCase().includes(q)
-    );
-  });
+  const filteredRecords = useMemo(() => {
+    return records.filter(rec => {
+      // owner filter (admin dashboard: respectively view)
+      if (isAdmin && ownerFilter !== 'all') {
+        if (getOwnerRole(rec) !== ownerFilter) return false;
+      }
+      if (!searchTerm) return true;
+      const q = searchTerm.toLowerCase();
+      const locLabel = rec.savedLocationLabel || (rec.location?.lat != null ? `${rec.location.lat}, ${rec.location.lng}` : '');
+      const persons = rec.handoverPersons || [];
+      const personNames = persons.map(p => p.name || '').join(' ');
+      const singleName = rec.handoverPersons?.[0]?.name || '';
+      const ownerName = getOwnerName(rec).toLowerCase();
+      const ownerRole = getOwnerRole(rec).toLowerCase();
+      return (
+        String(rec._id || rec.id).toLowerCase().includes(q) ||
+        locLabel.toLowerCase().includes(q) ||
+        personNames.toLowerCase().includes(q) ||
+        singleName.toLowerCase().includes(q) ||
+        ownerName.includes(q) ||
+        ownerRole.includes(q)
+      );
+    });
+  }, [records, searchTerm, ownerFilter, isAdmin]);
 
   return (
     <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 py-6 space-y-6">
-      {/* Header */}
-      <div className="wire-card p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white">
-        <div className="flex items-center gap-3">
-          <div className="h-10 w-10 border border-zinc-900 rounded-lg flex items-center justify-center bg-zinc-900 text-white shrink-0">
-            <KeyRound className="h-5 w-5" />
+      {/* Header — merged dashboard banner for admin */}
+      <div className="wire-card p-5 flex flex-col gap-4 bg-white">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 border border-zinc-900 rounded-lg flex items-center justify-center bg-zinc-900 text-white shrink-0">
+              <KeyRound className="h-5 w-5" />
+            </div>
+            <div>
+              <h1 className="text-lg font-semibold tracking-tight flex items-center gap-2">
+                Locks Directory
+                {isAdmin && <span className="text-[11px] font-mono bg-zinc-900 text-white rounded px-2 py-0.5">Merged Dashboard — Admin + Subadmin</span>}
+              </h1>
+              <p className="text-xs font-mono text-zinc-500">
+                {isAdmin
+                  ? `All locks from admin (${counts.admin}) & subadmin (${counts.subadmin}) — filter respectively below.`
+                  : `List of all locks, key counts, and associated handover locations & staff.`}
+              </p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-lg font-semibold tracking-tight">Locks Directory</h1>
-            <p className="text-xs font-mono text-zinc-500">List of all locks, key counts, and associated handover locations & staff.</p>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="border border-zinc-200 rounded-md px-3 py-1.5 text-xs font-mono bg-zinc-50">{counts.total} Total Locks</span>
+            {isAdmin && (
+              <>
+                <span className="border border-violet-200 bg-violet-50 text-violet-700 rounded-md px-2.5 py-1 text-xs font-mono">{counts.admin} Admin</span>
+                <span className="border border-amber-200 bg-amber-50 text-amber-700 rounded-md px-2.5 py-1 text-xs font-mono">{counts.subadmin} Subadmin</span>
+              </>
+            )}
+            {canSubmitRecord && (
+              <button onClick={() => navigate('/wizard')} className="wire-btn wire-btn-primary !py-1.5 text-xs flex items-center gap-1" title="Submit new Lock & Key record">
+                <PlusCircle className="h-3.5 w-3.5" /> New Record
+              </button>
+            )}
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="border border-zinc-200 rounded-md px-3 py-1.5 text-xs font-mono bg-zinc-50">{records.length} Total Locks</span>
-          {canSubmitRecord && (
-            <button onClick={() => navigate('/wizard')} className="wire-btn wire-btn-primary !py-1.5 text-xs flex items-center gap-1" title="Submit new Lock & Key record">
-              <PlusCircle className="h-3.5 w-3.5" /> New Record
-            </button>
-          )}
-        </div>
+
+        {/* Admin-only: respectively filter tabs */}
+        {isAdmin && (
+          <div className="flex items-center gap-2 border-t border-zinc-100 pt-3 flex-wrap">
+            <span className="text-xs font-mono text-zinc-500 flex items-center gap-1"><Filter className="h-3 w-3" /> View:</span>
+            {[
+              { key: 'all', label: `All (${counts.total})` },
+              { key: 'admin', label: `Admin Locks (${counts.admin})` },
+              { key: 'subadmin', label: `Subadmin Locks (${counts.subadmin})` },
+            ].map(tab => (
+              <button
+                key={tab.key}
+                onClick={() => setOwnerFilter(tab.key)}
+                className={`px-3 py-1.5 rounded-md border text-xs font-mono transition-colors ${ownerFilter === tab.key ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-700 border-zinc-200 hover:border-zinc-900'}`}
+              >
+                {tab.label}
+              </button>
+            ))}
+            <span className="text-[11px] font-mono text-zinc-400 ml-2 hidden sm:inline">Admin sees what subadmin stored — one page, respectively</span>
+          </div>
+        )}
       </div>
 
       {/* Search */}
@@ -67,7 +158,7 @@ export default function LocksDirectoryPage() {
           type="text"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          placeholder="Search by lock ID, placement location, or staff name..."
+          placeholder={isAdmin ? "Search by lock ID, location, staff name, or owner name/role..." : "Search by lock ID, placement location, or staff name..."}
           className="wire-input pr-9"
         />
         <Search className="absolute right-3 top-2.5 h-4 w-4 text-zinc-400" />
@@ -86,23 +177,29 @@ export default function LocksDirectoryPage() {
         <div className="wire-card p-10 text-center">
           <KeyRound className="h-10 w-10 mx-auto text-zinc-400 mb-2" />
           <p className="text-sm font-medium">No lock records found</p>
-          <p className="text-xs font-mono text-zinc-500 mt-1">Create a new handover to add locks.</p>
+          <p className="text-xs font-mono text-zinc-500 mt-1">
+            {isAdmin && ownerFilter !== 'all' ? `No ${ownerFilter} locks yet.` : 'Create a new handover to add locks.'}
+          </p>
+          {isAdmin && ownerFilter !== 'all' && (
+            <button onClick={() => setOwnerFilter('all')} className="mt-3 wire-btn text-xs">Show All</button>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
           {filteredRecords.map((rec) => {
             const id = rec._id || rec.id;
             const lockImg = pickUrl(rec.lockPhoto);
-            const keyImg = pickUrl(rec.keyPhoto);
-            const placeImg = pickUrl(rec.placementPhoto);
             const keyCountNum = parseInt(rec.keyCount, 10) || 1;
             const rawPersons = Array.isArray(rec.handoverPersons) && rec.handoverPersons.length > 0
               ? rec.handoverPersons
               : [];
             const handoverPersons = filterHandoverPersonsForDisplay(rawPersons, keyCountNum);
-
             const locationLabel = rec.savedLocationLabel || (rec.location?.lat != null ? `Location (${rec.location.lat.toFixed(2)}, ${rec.location.lng.toFixed(2)})` : 'Placement Location');
             const totalAllocated = handoverPersons.reduce((s, p) => s + (parseInt(p.keysGiven, 10) || 1), 0);
+            const ownerRole = getOwnerRole(rec);
+            const ownerName = getOwnerName(rec);
+            const isSubadminLock = ownerRole === 'subadmin';
+            const isAdminLock = ownerRole === 'admin';
 
             return (
               <div
@@ -111,7 +208,7 @@ export default function LocksDirectoryPage() {
                 className="wire-card p-4 hover:border-zinc-900 cursor-pointer transition-all flex flex-col justify-between group bg-white"
               >
                 <div className="space-y-3">
-                  {/* Card Top: Lock photo + Key badge */}
+                  {/* Card Top: Lock photo + badges */}
                   <div className="relative aspect-video rounded-lg border border-zinc-200 bg-zinc-50 overflow-hidden flex items-center justify-center">
                     {lockImg ? (
                       <img src={lockImg} alt="Lock" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
@@ -124,7 +221,21 @@ export default function LocksDirectoryPage() {
                     <span className="absolute bottom-2 left-2 bg-white/90 backdrop-blur-sm text-zinc-900 text-[10px] font-mono px-2 py-0.5 rounded border border-zinc-200">
                       #{String(id).slice(0, 8)}
                     </span>
+                    {/* Owner respectively badge — distinguishes admin vs subadmin lock */}
+                    {isAdmin && (
+                      <span className={`absolute top-2 left-2 text-[10px] font-mono font-bold px-2 py-1 rounded shadow border ${isSubadminLock ? 'bg-amber-500 text-white border-amber-600' : isAdminLock ? 'bg-violet-600 text-white border-violet-700' : 'bg-zinc-100 text-zinc-700 border-zinc-200'}`}>
+                        {isSubadminLock ? 'SUBADMIN' : isAdminLock ? 'ADMIN' : ownerRole.toUpperCase()}
+                      </span>
+                    )}
                   </div>
+
+                  {/* Owner line for merged view */}
+                  {isAdmin && (
+                    <div className={`flex items-center justify-between text-[11px] font-mono rounded px-2 py-1 border ${isSubadminLock ? 'bg-amber-50 border-amber-200 text-amber-800' : 'bg-violet-50 border-violet-200 text-violet-800'}`}>
+                      <span className="flex items-center gap-1"><Shield className="h-3 w-3" /> {ownerRole} · {ownerName}</span>
+                      <span className="opacity-60">{new Date(rec.createdAt).toLocaleDateString()}</span>
+                    </div>
+                  )}
 
                   {/* Info */}
                   <div>
@@ -138,9 +249,21 @@ export default function LocksDirectoryPage() {
                   </div>
                 </div>
 
-                <div className="mt-3 pt-3 border-t border-zinc-100 flex items-center justify-between text-xs font-mono text-zinc-400 group-hover:text-zinc-900">
-                  <span className="flex items-center gap-1"><Calendar className="h-3 w-3" /> {new Date(rec.createdAt).toLocaleDateString()}</span>
-                  <span>View Details →</span>
+                <div className="mt-3 pt-3 border-t border-zinc-100 flex items-center justify-between text-xs font-mono">
+                  <span className="flex items-center gap-1 text-zinc-400 group-hover:text-zinc-900"><Calendar className="h-3 w-3" /> {new Date(rec.createdAt).toLocaleDateString()}</span>
+                  <div className="flex items-center gap-1">
+                    {canDelete(rec) && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleDelete(rec); }}
+                        disabled={deletingId === (rec._id || rec.id)}
+                        className="border border-red-200 text-red-600 hover:bg-red-50 rounded px-2 py-1 text-[11px] font-mono flex items-center gap-1"
+                        title={`Delete ${ownerRole} lock`}
+                      >
+                        <Trash2 className="h-3 w-3" /> {deletingId === (rec._id || rec.id) ? '...' : 'Delete'}
+                      </button>
+                    )}
+                    <span className="text-zinc-400 group-hover:text-zinc-900">View Details →</span>
+                  </div>
                 </div>
               </div>
             );
@@ -161,9 +284,11 @@ export default function LocksDirectoryPage() {
             ? rec.handoverPersons
             : [];
           const handoverPersons = filterHandoverPersonsForDisplay(rawPersons, keyCountNum);
-
           const locationLabel = rec.savedLocationLabel || (rec.location?.lat != null ? `Location (${rec.location.lat.toFixed(2)}, ${rec.location.lng.toFixed(2)})` : 'Placement Location');
           const totalAllocated = handoverPersons.reduce((s, p) => s + (parseInt(p.keysGiven, 10) || 1), 0);
+          const ownerRole = getOwnerRole(rec);
+          const ownerName = getOwnerName(rec);
+          const ownerEmail = (rec.ownerId && typeof rec.ownerId === 'object' && rec.ownerId.email) ? rec.ownerId.email : '';
 
           return (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -181,16 +306,31 @@ export default function LocksDirectoryPage() {
                       <KeyRound className="h-5 w-5" />
                     </div>
                     <div>
-                      <h3 className="text-base font-bold text-zinc-900 flex items-center gap-2">
+                      <h3 className="text-base font-bold text-zinc-900 flex items-center gap-2 flex-wrap">
                         Lock Details <span className="text-xs font-mono font-normal text-zinc-500">#{String(id).slice(0, 10)}</span>
+                        {ownerRole !== 'unknown' && (
+                          <span className={`text-[11px] font-mono font-bold px-2 py-0.5 rounded border ${ownerRole === 'subadmin' ? 'bg-amber-500 text-white border-amber-600' : ownerRole === 'admin' ? 'bg-violet-600 text-white border-violet-700' : 'bg-zinc-100 border-zinc-200'}`}>
+                            {ownerRole.toUpperCase()} LOCK
+                          </span>
+                        )}
                       </h3>
                       <p className="text-xs font-mono text-zinc-500 flex items-center gap-1"><MapPin className="h-3 w-3" /> {locationLabel}</p>
+                      {ownerRole !== 'unknown' && (
+                        <p className="text-[11px] font-mono text-zinc-600 mt-0.5 flex items-center gap-1">
+                          <Shield className="h-3 w-3" /> Created by: <span className="font-semibold">{ownerName}</span> ({ownerRole}) {ownerEmail ? `· ${ownerEmail}` : ''}
+                        </p>
+                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
                     {canSubmitRecord && (
                       <button onClick={() => { setSelectedLock(null); navigate(`/wizard/edit/${id}`); }} className="wire-btn wire-btn-primary !py-1.5 text-xs">
-                        <Pencil className="h-3.5 w-3.5" /> Edit Record
+                        <Pencil className="h-3.5 w-3.5" /> Edit
+                      </button>
+                    )}
+                    {canDelete(rec) && (
+                      <button onClick={() => handleDelete(rec)} disabled={deletingId === id} className="wire-btn border-red-200 text-red-600 hover:bg-red-50 !py-1.5 text-xs flex items-center gap-1">
+                        <Trash2 className="h-3.5 w-3.5" /> {deletingId === id ? '...' : 'Delete'}
                       </button>
                     )}
                     <button onClick={() => setSelectedLock(null)} className="h-8 w-8 rounded-md border border-zinc-200 bg-white flex items-center justify-center hover:bg-zinc-100">
@@ -207,9 +347,10 @@ export default function LocksDirectoryPage() {
                       <p className="text-xs font-mono text-zinc-400 uppercase tracking-wide">Number of Keys</p>
                       <p className="text-2xl font-bold font-mono mt-0.5">{keyCountNum} <span className="text-xs font-normal text-zinc-300">Total keys available</span></p>
                     </div>
-                    <div className="flex gap-2 text-xs font-mono">
+                    <div className="flex gap-2 text-xs font-mono flex-wrap">
                       <span className="border border-zinc-700 bg-zinc-800 rounded px-2.5 py-1">Forms: {handoverPersons.length}</span>
                       <span className="border border-zinc-700 bg-zinc-800 rounded px-2.5 py-1">Allocated: {totalAllocated} / {keyCountNum}</span>
+                      {ownerRole !== 'unknown' && <span className={`border rounded px-2.5 py-1 font-bold ${ownerRole === 'subadmin' ? 'bg-amber-500 border-amber-600' : 'bg-violet-600 border-violet-700'}`}>{ownerRole} LOCK</span>}
                     </div>
                   </div>
 
@@ -294,7 +435,7 @@ export default function LocksDirectoryPage() {
 
                 {/* Footer */}
                 <div className="p-3 border-t border-zinc-200 bg-zinc-50 flex justify-between items-center text-xs font-mono">
-                  <span className="text-zinc-500">Record Created: {new Date(rec.createdAt).toLocaleDateString()}</span>
+                  <span className="text-zinc-500">Record Created: {new Date(rec.createdAt).toLocaleDateString()} {ownerName ? `· by ${ownerName} (${ownerRole})` : ''}</span>
                   <button onClick={() => setSelectedLock(null)} className="wire-btn text-xs">Close</button>
                 </div>
               </motion.div>

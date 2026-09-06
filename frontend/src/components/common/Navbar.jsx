@@ -31,7 +31,7 @@ export default function Navbar() {
     ...(canSubmitRecord ? [{ to: '/wizard', label: 'New', icon: PlusCircle }] : []),
     // { to: '/history', label: 'History', icon: History },
     { to: '/locks-directory', label: 'Locks', icon: Shield },
-    ...((currentUser?.role === 'staff' || currentUser?.role === 'subadmin') ? [{ to: '/staff/dashboard', label: isAuthenticated && currentUser?.role === 'subadmin' ? 'My Locks + Record' : 'My Locks', icon: LayoutDashboard || Shield }] : []),
+    ...(currentUser?.role === 'staff' ? [{ to: '/staff/dashboard', label: 'My Locks', icon: LayoutDashboard }] : []),
     ...(currentUser?.role === 'staff' ? [{ to: '/staff/complete', label: 'Profile', icon: UserPlus }] : []),
     ...(currentUser?.role === 'admin' ? [{ to: '/admin/settings', label: 'Admin Settings', icon: Settings }] : []),
     ...(currentUser?.role === 'admin' ? [{ to: '/admin/staff', label: ' Staff', icon: ShieldUser }] : []),
