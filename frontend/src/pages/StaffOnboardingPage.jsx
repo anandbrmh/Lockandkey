@@ -1,10 +1,10 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
-import { Camera, Upload, Trash2, User, Mail, Phone, Building, MapPin, Briefcase, ShieldCheck, AlertCircle, Check, ArrowRight, Image as ImageIcon, Shield } from 'lucide-react';
+import Webcam from 'react-webcam';
+import { Camera, Upload, Trash2, User, Mail, Phone, Building, MapPin, Briefcase, ShieldCheck, AlertCircle, Check, ArrowRight, Image as ImageIcon, Shield, RotateCw } from 'lucide-react';
 import { selectCurrentUser } from '../features/auth/authSlice';
 import { fetchStaffProfile, completeStaffProfile, verifyAdminCode, selectStaff } from '../features/staff/staffSlice';
-import { useCamera } from '../hooks/useCamera';
 
 export default function StaffOnboardingPage() {
   const dispatch = useDispatch();
@@ -29,7 +29,11 @@ export default function StaffOnboardingPage() {
   const [photoFile, setPhotoFile] = useState(null);
   const [showCamera, setShowCamera] = useState(false);
   const fileRef = useRef(null);
-  const { videoRef, canvasRef, startCamera, stopCamera, capturePhoto, isActive } = useCamera();
+  const cameraFileRef = useRef(null);
+  const webcamRef = useRef(null);
+  const [facingMode, setFacingMode] = useState('user');
+  const [camError, setCamError] = useState('');
+  const [camReady, setCamReady] = useState(false);
 
   useEffect(() => { dispatch(fetchStaffProfile()); }, [dispatch]);
 
@@ -67,18 +71,16 @@ export default function StaffOnboardingPage() {
     reader.readAsDataURL(file);
   };
 
-  const handleCameraCapture = async () => {
-    const dataUrl = capturePhoto();
-    if (!dataUrl) return;
-    setPhotoPreview(dataUrl);
-    // convert dataUrl to file
-    const res = await fetch(dataUrl);
+  const handleCameraCapture = useCallback(async () => {
+    const imageSrc = webcamRef.current?.getScreenshot();
+    if (!imageSrc) return;
+    setPhotoPreview(imageSrc);
+    const res = await fetch(imageSrc);
     const blob = await res.blob();
     const file = new File([blob], `staff-camera-${Date.now()}.jpg`, { type: 'image/jpeg' });
     setPhotoFile(file);
     setShowCamera(false);
-    stopCamera();
-  };
+  }, []);
 
   const clearPhoto = () => { setPhotoPreview(null); setPhotoFile(null); };
 
@@ -134,8 +136,10 @@ export default function StaffOnboardingPage() {
           {!photoPreview ? (
             <div className="flex flex-wrap gap-2">
               <button type="button" onClick={() => setShowCamera(true)} className="wire-btn wire-btn-primary text-xs"><Camera className="h-3.5 w-3.5" /> Camera</button>
-              <button type="button" onClick={() => fileRef.current?.click()} className="wire-btn text-xs"><Upload className="h-3.5 w-3.5" /> Upload file</button>
+              <button type="button" onClick={() => cameraFileRef.current?.click()} className="wire-btn text-xs border-dashed"><Camera className="h-3.5 w-3.5" /> Native Camera</button>
+              <button type="button" onClick={() => fileRef.current?.click()} className="wire-btn text-xs"><Upload className="h-3.5 w-3.5" /> Gallery</button>
               <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => { const f=e.target.files?.[0]; if(f) handleFile(f); e.target.value=''; }} />
+              <input ref={cameraFileRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => { const f=e.target.files?.[0]; if(f) handleFile(f); e.target.value=''; }} />
             </div>
           ) : (
             <div className="relative max-w-sm border border-zinc-200 rounded-md overflow-hidden">
@@ -144,13 +148,30 @@ export default function StaffOnboardingPage() {
             </div>
           )}
           {showCamera && (
-            <div className="border border-zinc-200 rounded-md p-3 bg-zinc-50 space-y-2">
-              <video ref={videoRef} autoPlay playsInline className="w-full rounded bg-black aspect-video" />
-              <canvas ref={canvasRef} className="hidden" />
+            <div className="border border-zinc-200 rounded-md p-3 bg-zinc-900 space-y-3">
+              <div className="relative rounded overflow-hidden bg-black aspect-video">
+                <Webcam
+                  ref={webcamRef}
+                  audio={false}
+                  screenshotFormat="image/jpeg"
+                  screenshotQuality={0.85}
+                  videoConstraints={{ facingMode, width: 1280, height: 720 }}
+                  mirrored={facingMode === 'user'}
+                  onUserMedia={() => { setCamReady(true); setCamError(''); }}
+                  onUserMediaError={(e) => setCamError(e?.message || 'Camera error')}
+                  className="w-full h-full object-cover"
+                />
+                {!camReady && !camError && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/60">
+                    <div className="h-8 w-8 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  </div>
+                )}
+              </div>
+              {camError && <p className="text-xs text-red-400 bg-red-950/50 border border-red-900 rounded px-2 py-1">{camError} — use Gallery fallback.</p>}
               <div className="flex gap-2">
-                <button type="button" onClick={async () => { await startCamera(); }} className="wire-btn text-xs" disabled={isActive}>Start</button>
-                <button type="button" onClick={handleCameraCapture} className="wire-btn wire-btn-primary text-xs" disabled={!isActive}>Capture</button>
-                <button type="button" onClick={() => { stopCamera(); setShowCamera(false); }} className="wire-btn text-xs">Close</button>
+                <button type="button" onClick={() => setFacingMode(p => p === 'user' ? 'environment' : 'user')} className="wire-btn text-xs bg-zinc-800 text-zinc-200 border-zinc-700"><RotateCw className="h-3.5 w-3.5" /> Flip</button>
+                <button type="button" onClick={handleCameraCapture} className="wire-btn wire-btn-primary text-xs flex-1" disabled={!camReady}>Capture</button>
+                <button type="button" onClick={() => setShowCamera(false)} className="wire-btn text-xs bg-zinc-800 text-zinc-200 border-zinc-700">Close</button>
               </div>
             </div>
           )}

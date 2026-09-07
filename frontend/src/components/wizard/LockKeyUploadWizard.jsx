@@ -41,6 +41,7 @@ export default function LockKeyUploadWizard({ editingId }) {
   const [activePersonIdx, setActivePersonIdx] = useState(0);
   const [cameraPersonIdx, setCameraPersonIdx] = useState(null);
   const personFileRefs = React.useRef({});
+  const personCameraRefs = React.useRef({});
 
   useEffect(() => { dispatch(fetchSavedPersons({ limit: 50 })); dispatch(fetchSavedLocations({ limit: 50 })); }, [dispatch]);
 
@@ -175,10 +176,14 @@ const handleSubmit = async () => {
                         <button type="button" onClick={() => { setActivePersonIdx(idx); setShowPersonBrowse(true); }} className="wire-btn wire-btn-primary text-xs mx-auto"><Users className="h-3.5 w-3.5" /> Browse verified staff</button>
                       </div>
                     ) : (
-                      <div className="flex gap-2">
-                        <button type="button" onClick={() => setCameraPersonIdx(idx)} className="flex-1 wire-btn wire-btn-primary text-xs"><Camera className="h-3.5 w-3.5" /> Camera</button>
-                        <button type="button" onClick={() => personFileRefs.current[idx]?.click()} className="flex-1 wire-btn text-xs"><Upload className="h-3.5 w-3.5" /> File</button>
+                      <div className="space-y-2">
+                        <div className="flex gap-2">
+                          <button type="button" onClick={() => setCameraPersonIdx(idx)} className="flex-1 wire-btn wire-btn-primary text-xs"><Camera className="h-3.5 w-3.5" /> Camera</button>
+                          <button type="button" onClick={() => personFileRefs.current[idx]?.click()} className="flex-1 wire-btn text-xs"><Upload className="h-3.5 w-3.5" /> Gallery</button>
+                        </div>
+                        <button type="button" onClick={() => personCameraRefs.current[idx]?.click()} className="w-full wire-btn text-[11px] border-dashed py-1.5"><Camera className="h-3 w-3" /> Native Camera (fallback)</button>
                         <input ref={el => personFileRefs.current[idx] = el} type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handlePersonFile(idx, f); e.target.value = ''; }} />
+                        <input ref={el => personCameraRefs.current[idx] = el} type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handlePersonFile(idx, f); e.target.value = ''; }} />
                       </div>
                     )
                   ) : (

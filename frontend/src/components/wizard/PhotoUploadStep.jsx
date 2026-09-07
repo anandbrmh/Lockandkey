@@ -3,7 +3,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { setPhoto, removePhoto, selectWizard } from '../../features/wizard/wizardSlice';
 import { useGeolocation } from '../../hooks/useGeolocation';
 import CameraCapture from './CameraCapture';
-import { Camera, Upload, Trash2, RefreshCcw, AlertCircle, Clock } from 'lucide-react';
+import { Camera, Upload, Trash2, RefreshCcw, AlertCircle, Clock, ImageIcon } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export default function PhotoUploadStep({ title, description, photoKey, extraFields, browseAction }) {
@@ -12,28 +12,39 @@ export default function PhotoUploadStep({ title, description, photoKey, extraFie
   const photoData = wizardState[photoKey];
   const metadata = wizardState.metadata[photoKey];
   const fileInputRef = useRef(null);
+  const cameraInputRef = useRef(null);
   const [isDragActive, setIsDragActive] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [imgError, setImgError] = useState(false);
   const { getPosition } = useGeolocation();
   React.useEffect(() => { setImgError(false); }, [photoData]);
+
   const processPhoto = async (base64String) => {
     setErrorMsg('');
     try {
       const location = await getPosition();
       dispatch(setPhoto({ key: photoKey, photoData: base64String, timestamp: new Date().toISOString(), geolocation: location }));
-    } catch { dispatch(setPhoto({ key: photoKey, photoData: base64String, timestamp: new Date().toISOString(), geolocation: null })); }
+    } catch {
+      dispatch(setPhoto({ key: photoKey, photoData: base64String, timestamp: new Date().toISOString(), geolocation: null }));
+    }
   };
+
   const handleFile = (file) => {
     if (!file) return;
-    if (!file.type.startsWith('image/')) { setErrorMsg('Only images allowed'); return; }
+    if (!file.type.startsWith('image/')) { setErrorMsg('Only image files allowed (JPEG, PNG, WEBP)'); return; }
+    if (file.size > 10 * 1024 * 1024) { setErrorMsg('Image too large (max 10MB)'); return; }
     const reader = new FileReader();
     reader.onload = (e) => { if (e.target?.result) processPhoto(e.target.result); };
+    reader.onerror = () => setErrorMsg('Failed to read file');
     reader.readAsDataURL(file);
   };
+
   const handleDrag = (e) => { e.preventDefault(); e.stopPropagation(); if (e.type === 'dragenter' || e.type === 'dragover') setIsDragActive(true); else if (e.type === 'dragleave') setIsDragActive(false); };
   const handleDrop = (e) => { e.preventDefault(); e.stopPropagation(); setIsDragActive(false); if (e.dataTransfer.files?.[0]) handleFile(e.dataTransfer.files[0]); };
+
+  // Check if native camera (getUserMedia) is likely supported
+  const isCameraSupported = typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getUserMedia && window.isSecureContext;
 
   return (
     <div className="space-y-4">
@@ -42,31 +53,82 @@ export default function PhotoUploadStep({ title, description, photoKey, extraFie
         <p className="mt-1 text-xs font-mono text-zinc-500">{description}</p>
       </div>
 
-      {errorMsg && <div className="flex items-center gap-2 border border-red-200 bg-red-50 text-red-700 px-3 py-2 rounded-md text-xs"><AlertCircle className="h-4 w-4" /> {errorMsg}</div>}
+      {errorMsg && <div className="flex items-center gap-2 border border-red-200 bg-red-50 text-red-700 px-3 py-2 rounded-md text-xs"><AlertCircle className="h-4 w-4 shrink-0" /> {errorMsg}</div>}
 
       {!photoData ? (
         <div onDragEnter={handleDrag} onDragOver={handleDrag} onDragLeave={handleDrag} onDrop={handleDrop}
-          className={`flex flex-col items-center justify-center p-8 text-center border rounded-lg min-h-[220px] ${isDragActive ? 'bg-zinc-50 border-zinc-900 border-dashed' : 'bg-white border-dashed border-zinc-300'}`}>
+          className={`flex flex-col items-center justify-center p-8 text-center border rounded-lg min-h-[240px] ${isDragActive ? 'bg-zinc-50 border-zinc-900 border-dashed' : 'bg-white border-dashed border-zinc-300'}`}>
           <span className="h-10 w-10 border border-zinc-200 rounded-md bg-zinc-50 flex items-center justify-center"><Upload className="h-5 w-5 text-zinc-500" /></span>
           <p className="mt-3 text-xs font-mono font-medium">Drag & drop image</p>
-          <p className="text-[11px] font-mono text-zinc-500">JPEG, PNG, WEBP</p>
+          <p className="text-[11px] font-mono text-zinc-500">JPEG, PNG, WEBP — max 10MB</p>
+
+          {/* Primary actions: Camera (react-webcam) + Browse (gallery) */}
           <div className="mt-4 flex gap-2 w-full max-w-xs">
-            <button type="button" onClick={() => setShowCamera(true)} className="flex-1 wire-btn wire-btn-primary text-xs"><Camera className="h-3.5 w-3.5" /> Camera</button>
-            <button type="button" onClick={() => fileInputRef.current?.click()} className="flex-1 wire-btn text-xs"><Upload className="h-3.5 w-3.5" /> Browse</button>
+            <button type="button" onClick={() => setShowCamera(true)} className="flex-1 wire-btn wire-btn-primary text-xs">
+              <Camera className="h-3.5 w-3.5" /> Camera
+            </button>
+            <button type="button" onClick={() => fileInputRef.current?.click()} className="flex-1 wire-btn text-xs">
+              <ImageIcon className="h-3.5 w-3.5" /> Gallery
+            </button>
           </div>
+
+          {/* Mobile fallback: direct camera input via capture attribute */}
+          <div className="mt-2 flex gap-2 w-full max-w-xs">
+            <button
+              type="button"
+              onClick={() => cameraInputRef.current?.click()}
+              className="flex-1 wire-btn text-[11px] border-dashed py-2"
+              title="Opens native camera app (fallback)"
+            >
+              <Camera className="h-3 w-3" /> Native Camera
+            </button>
+            <button type="button" onClick={() => fileInputRef.current?.click()} className="flex-1 wire-btn text-[11px] py-2">
+              <Upload className="h-3 w-3" /> Browse Files
+            </button>
+          </div>
+
+          {!isCameraSupported && (
+            <p className="mt-3 text-[11px] font-mono text-amber-600 bg-amber-50 border border-amber-200 rounded px-2 py-1 max-w-xs">
+              Camera needs HTTPS. Use Gallery / Browse on this connection, or open via HTTPS.
+            </p>
+          )}
+
           {browseAction && <button type="button" onClick={browseAction.onClick} className="mt-2 w-full max-w-xs wire-btn text-xs border-dashed">{browseAction.label}</button>}
-          <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={(e)=>{ if(e.target.files?.[0]) handleFile(e.target.files[0]); }} />
+
+          {/* Hidden inputs */}
+          {/* Gallery / file picker - no capture, lets user choose */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e)=>{ if(e.target.files?.[0]) handleFile(e.target.files[0]); e.target.value=''; }}
+          />
+          {/* Native camera - capture attribute forces camera on mobile */}
+          <input
+            ref={cameraInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={(e)=>{ if(e.target.files?.[0]) handleFile(e.target.files[0]); e.target.value=''; }}
+          />
         </div>
       ) : (
         <div className="max-w-md mx-auto w-full space-y-2">
           <div className="relative overflow-hidden border border-zinc-200 rounded-lg bg-white aspect-video flex items-center justify-center">
             {!imgError ? <img src={photoData} alt={title} className="w-full h-full object-cover" onError={() => setImgError(true)} /> : <span className="text-xs font-mono text-zinc-500">Image unavailable</span>}
             <div className="absolute inset-0 opacity-0 hover:opacity-100 bg-white/80 flex items-center justify-center gap-2 transition-opacity">
-              <button type="button" onClick={() => setShowCamera(true)} className="h-9 w-9 bg-white border border-zinc-900 rounded-md flex items-center justify-center"><RefreshCcw className="h-4 w-4" /></button>
-              <button type="button" onClick={() => { dispatch(removePhoto({ key: photoKey })); if(fileInputRef.current) fileInputRef.current.value=''; }} className="h-9 w-9 bg-zinc-900 text-white rounded-md flex items-center justify-center"><Trash2 className="h-4 w-4" /></button>
+              <button type="button" onClick={() => setShowCamera(true)} className="h-9 w-9 bg-white border border-zinc-900 rounded-md flex items-center justify-center" title="Retake with camera"><Camera className="h-4 w-4" /></button>
+              <button type="button" onClick={() => fileInputRef.current?.click()} className="h-9 w-9 bg-white border border-zinc-200 rounded-md flex items-center justify-center" title="Choose from gallery"><ImageIcon className="h-4 w-4" /></button>
+              <button type="button" onClick={() => { dispatch(removePhoto({ key: photoKey })); if(fileInputRef.current) fileInputRef.current.value=''; if(cameraInputRef.current) cameraInputRef.current.value=''; }} className="h-9 w-9 bg-zinc-900 text-white rounded-md flex items-center justify-center" title="Remove"><Trash2 className="h-4 w-4" /></button>
             </div>
           </div>
           <div className="flex items-center gap-1 text-[11px] font-mono text-zinc-500 border border-zinc-200 rounded px-2 py-1 bg-white"><Clock className="h-3 w-3" /> {metadata?.timestamp ? new Date(metadata.timestamp).toLocaleTimeString() : new Date().toLocaleTimeString()}</div>
+          <div className="flex gap-2">
+            <button type="button" onClick={() => setShowCamera(true)} className="flex-1 wire-btn text-xs"><RefreshCcw className="h-3.5 w-3.5" /> Retake</button>
+            <button type="button" onClick={() => { dispatch(removePhoto({ key: photoKey })); }} className="flex-1 wire-btn text-xs"><Trash2 className="h-3.5 w-3.5" /> Remove</button>
+          </div>
         </div>
       )}
 
