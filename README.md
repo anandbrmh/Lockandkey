@@ -1,5 +1,5 @@
 # Lock & Key Management — Schema Documentation
-https://lockandkey-8lr0urk1c-anandbrmh.vercel.app/
+ https://lockandkey-three.vercel.app
 
 ## Introduction: How the Schemas Fit Together
 
