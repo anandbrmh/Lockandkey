@@ -3,7 +3,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { setPhoto, removePhoto, selectWizard } from '../../features/wizard/wizardSlice';
 import { useGeolocation } from '../../hooks/useGeolocation';
 import CameraCapture from './CameraCapture';
-import { Camera, Upload, Trash2, RefreshCcw, AlertCircle, Clock, ImageIcon } from 'lucide-react';
+import { Camera, Upload, Trash2, RefreshCcw, AlertCircle, Clock } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export default function PhotoUploadStep({ title, description, photoKey, extraFields, browseAction }) {
@@ -12,7 +12,6 @@ export default function PhotoUploadStep({ title, description, photoKey, extraFie
   const photoData = wizardState[photoKey];
   const metadata = wizardState.metadata[photoKey];
   const fileInputRef = useRef(null);
-  const cameraInputRef = useRef(null);
   const [isDragActive, setIsDragActive] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
@@ -62,54 +61,29 @@ export default function PhotoUploadStep({ title, description, photoKey, extraFie
           <p className="mt-3 text-xs font-mono font-medium">Drag & drop image</p>
           <p className="text-[11px] font-mono text-zinc-500">JPEG, PNG, WEBP — max 10MB</p>
 
-          {/* Primary actions: Camera (react-webcam) + Browse (gallery) */}
+          {/* Camera + Browse Files — Native Camera & Gallery removed per request, Browse kept */}
           <div className="mt-4 flex gap-2 w-full max-w-xs">
             <button type="button" onClick={() => setShowCamera(true)} className="flex-1 wire-btn wire-btn-primary text-xs">
               <Camera className="h-3.5 w-3.5" /> Camera
             </button>
             <button type="button" onClick={() => fileInputRef.current?.click()} className="flex-1 wire-btn text-xs">
-              <ImageIcon className="h-3.5 w-3.5" /> Gallery
-            </button>
-          </div>
-
-          {/* Mobile fallback: direct camera input via capture attribute */}
-          <div className="mt-2 flex gap-2 w-full max-w-xs">
-            <button
-              type="button"
-              onClick={() => cameraInputRef.current?.click()}
-              className="flex-1 wire-btn text-[11px] border-dashed py-2"
-              title="Opens native camera app (fallback)"
-            >
-              <Camera className="h-3 w-3" /> Native Camera
-            </button>
-            <button type="button" onClick={() => fileInputRef.current?.click()} className="flex-1 wire-btn text-[11px] py-2">
-              <Upload className="h-3 w-3" /> Browse Files
+              <Upload className="h-3.5 w-3.5" /> Browse File
             </button>
           </div>
 
           {!isCameraSupported && (
             <p className="mt-3 text-[11px] font-mono text-amber-600 bg-amber-50 border border-amber-200 rounded px-2 py-1 max-w-xs">
-              Camera needs HTTPS. Use Gallery / Browse on this connection, or open via HTTPS.
+              Camera needs HTTPS. Open via HTTPS for camera capture.
             </p>
           )}
 
           {browseAction && <button type="button" onClick={browseAction.onClick} className="mt-2 w-full max-w-xs wire-btn text-xs border-dashed">{browseAction.label}</button>}
 
-          {/* Hidden inputs */}
-          {/* Gallery / file picker - no capture, lets user choose */}
+          {/* Hidden input for Browse File */}
           <input
             ref={fileInputRef}
             type="file"
             accept="image/*"
-            className="hidden"
-            onChange={(e)=>{ if(e.target.files?.[0]) handleFile(e.target.files[0]); e.target.value=''; }}
-          />
-          {/* Native camera - capture attribute forces camera on mobile */}
-          <input
-            ref={cameraInputRef}
-            type="file"
-            accept="image/*"
-            capture="environment"
             className="hidden"
             onChange={(e)=>{ if(e.target.files?.[0]) handleFile(e.target.files[0]); e.target.value=''; }}
           />
@@ -120,8 +94,7 @@ export default function PhotoUploadStep({ title, description, photoKey, extraFie
             {!imgError ? <img src={photoData} alt={title} className="w-full h-full object-cover" onError={() => setImgError(true)} /> : <span className="text-xs font-mono text-zinc-500">Image unavailable</span>}
             <div className="absolute inset-0 opacity-0 hover:opacity-100 bg-white/80 flex items-center justify-center gap-2 transition-opacity">
               <button type="button" onClick={() => setShowCamera(true)} className="h-9 w-9 bg-white border border-zinc-900 rounded-md flex items-center justify-center" title="Retake with camera"><Camera className="h-4 w-4" /></button>
-              <button type="button" onClick={() => fileInputRef.current?.click()} className="h-9 w-9 bg-white border border-zinc-200 rounded-md flex items-center justify-center" title="Choose from gallery"><ImageIcon className="h-4 w-4" /></button>
-              <button type="button" onClick={() => { dispatch(removePhoto({ key: photoKey })); if(fileInputRef.current) fileInputRef.current.value=''; if(cameraInputRef.current) cameraInputRef.current.value=''; }} className="h-9 w-9 bg-zinc-900 text-white rounded-md flex items-center justify-center" title="Remove"><Trash2 className="h-4 w-4" /></button>
+              <button type="button" onClick={() => { dispatch(removePhoto({ key: photoKey })); if(fileInputRef.current) fileInputRef.current.value=''; }} className="h-9 w-9 bg-zinc-900 text-white rounded-md flex items-center justify-center" title="Remove"><Trash2 className="h-4 w-4" /></button>
             </div>
           </div>
           <div className="flex items-center gap-1 text-[11px] font-mono text-zinc-500 border border-zinc-200 rounded px-2 py-1 bg-white"><Clock className="h-3 w-3" /> {metadata?.timestamp ? new Date(metadata.timestamp).toLocaleTimeString() : new Date().toLocaleTimeString()}</div>
