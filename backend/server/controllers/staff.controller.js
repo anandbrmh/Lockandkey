@@ -155,10 +155,8 @@ export async function verifyAdminCode(req, res, next) {
 export async function listVerifiedStaff(req, res, next) {
   try {
     if (req.user.role !== "admin") return res.status(403).json({ success: false, message: "Only admin can view verified staff" });
-    const filter = { adminCodeVerified: true };
-    if (req.user.adminCode) {
-      filter.$or = [{ linkedAdmin: req.user._id }, { verifiedAdminCode: req.user.adminCode }];
-    }
+    // Strictly scope to this admin's linkedAdmin — no verifiedAdminCode fallback, prevents abc appearing under wrong admin
+    const filter = { adminCodeVerified: true, linkedAdmin: req.user._id };
     const list = await Staff.find(filter).populate("user", "name email role adminCode").populate("linkedAdmin", "name email").sort("-updatedAt").lean();
     res.json({ success: true, data: list });
   } catch (err) { next(err); }

@@ -20,8 +20,18 @@ export default function BrowsePersonModal({ open, onClose, onSelect }) {
     dispatch(fetchSavedPersons({ search, limit: 50, verified: isAdmin ? true : undefined }));
   };
 
-  // Admin sees only verified staff; client-side fallback filter
-  const displayPersons = isAdmin ? persons.filter(p => p.adminCodeVerified) : persons;
+  // Admin sees only verified staff linked to this admin — backend strictly filters by linkedAdmin; client is defensive fallback
+  const adminIdStr = (currentUser?._id || currentUser?.id || '').toString();
+  const displayPersons = isAdmin
+    ? persons.filter(p => {
+        if (!p.adminCodeVerified) return false;
+        // If backend provided linkedAdminId/linkedAdmin, enforce strict match
+        const linkedId = p.linkedAdminId?.toString() || (p.linkedAdmin?._id ? p.linkedAdmin._id.toString() : (typeof p.linkedAdmin === 'string' ? p.linkedAdmin : ''));
+        if (linkedId) return linkedId === adminIdStr;
+        // No linkedAdmin info yet (backend not restarted) — trust backend's already-filtered result
+        return true;
+      })
+    : persons;
 
   if (!open) return null;
 

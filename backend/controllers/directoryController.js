@@ -1,5 +1,6 @@
 import SavedLocation from "../models/SavedLocation.js";
 import LockKeyRecord from "../models/LockKeyRecord.js";
+import mongoose from "mongoose";
 import Staff from "../models/staff.js";
 import { deleteFromImageKit } from "../services/storageService.js";
 
@@ -10,6 +11,7 @@ export const mapStaffToPerson = (s) => {
   const userObj = s.user && typeof s.user === 'object' ? s.user : null;
   const userRole = userObj?.role || s.userRole || null;
   const isSubAdmin = userRole === 'subadmin';
+  const linkedAdminObj = s.linkedAdmin && typeof s.linkedAdmin === 'object' ? s.linkedAdmin : null;
   return {
     _id: s._id,
     name: s.name,
@@ -30,6 +32,9 @@ export const mapStaffToPerson = (s) => {
     profileCompleted: s.profileCompleted,
     adminCodeVerified: !!s.adminCodeVerified,
     verifiedAdminCode: s.verifiedAdminCode || null,
+    linkedAdmin: linkedAdminObj ? linkedAdminObj._id.toString() : (s.linkedAdmin ? s.linkedAdmin.toString() : null),
+    // linkedAdminId retained for backward compatibility
+    linkedAdminId: linkedAdminObj ? linkedAdminObj._id?.toString() : (s.linkedAdmin ? s.linkedAdmin.toString() : null),
     usageCount: 1,
     lastUsedAt: s.updatedAt || s.createdAt,
     createdAt: s.createdAt,
@@ -81,44 +86,17 @@ export const syncDirectoryFromRecords = async (userId = null) => {
 
 export const listSavedPersons = async (req, res, next) => {
   try {
-    const { search = "", page = 1, limit = 20, verified, adminCodeVerified } = req.query;
-    const pageNum = Math.max(1, parseInt(page, 10) || 1);
-    const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 20));
-    const skip = (pageNum - 1) * limitNum;
-
-    const filter = {};
-    // Verified-only filter for admin handover: ?verified=true or ?adminCodeVerified=true
-    const verifiedOnly = String(verified).toLowerCase() === 'true' || String(adminCodeVerified).toLowerCase() === 'true';
-    if (verifiedOnly) filter.adminCodeVerified = true;
-    if (search) {
-      const regex = { $regex: search, $options: "i" };
-      filter.$or = [
-        { name: regex },
-        { email: regex },
-        { department: regex },
-        { designation: regex },
-        { roleTitle: regex },
-        { phone: regex },
-        { contactNumber: regex },
-      ];
-    }
-
-    const [records, total] = await Promise.all([
-      Staff.find(filter).populate("user", "name email role adminCode").sort("-updatedAt").skip(skip).limit(limitNum).lean(),
-      Staff.countDocuments(filter),
-    ]);
-
-    const persons = records.map(mapStaffToPerson);
-
-    res.json({
-      success: true,
-      data: {
-        persons,
-        pagination: { total, page: pageNum, limit: limitNum, pages: Math.ceil(total / limitNum) },
-      },
-    });
-  } catch (err) { next(err); }
+    const staffList = await Staff.find({ linkedAdmin: req.user._id })
+      .populate("user", "name email role adminCode")
+      .lean();
+    const persons = staffList.map(s => mapStaffToPerson(s));
+    res.status(200).json({ success: true, data: persons });
+  } catch (err) {
+    next(err);
+  }
 };
+
+
 
 export const getSavedPerson = async (req, res, next) => {
   try {

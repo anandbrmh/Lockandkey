@@ -10,6 +10,7 @@ export const mapStaffToPerson = (s) => {
   const userObj = s.user && typeof s.user === 'object' ? s.user : null;
   const userRole = userObj?.role || s.userRole || null;
   const isSubAdmin = userRole === 'subadmin';
+  const linkedAdminObj = s.linkedAdmin && typeof s.linkedAdmin === 'object' ? s.linkedAdmin : null;
   return {
     _id: s._id,
     name: s.name,
@@ -30,6 +31,8 @@ export const mapStaffToPerson = (s) => {
     profileCompleted: s.profileCompleted,
     adminCodeVerified: !!s.adminCodeVerified,
     verifiedAdminCode: s.verifiedAdminCode || null,
+    linkedAdmin: linkedAdminObj || s.linkedAdmin || null,
+    linkedAdminId: linkedAdminObj?._id?.toString() || (s.linkedAdmin ? s.linkedAdmin.toString() : null),
     usageCount: 1,
     lastUsedAt: s.updatedAt || s.createdAt,
     createdAt: s.createdAt,
@@ -86,24 +89,68 @@ export const listSavedPersons = async (req, res, next) => {
     const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 20));
     const skip = (pageNum - 1) * limitNum;
 
-    const filter = {};
     const verifiedOnly = String(verified).toLowerCase() === 'true' || String(adminCodeVerified).toLowerCase() === 'true';
-    if (verifiedOnly) filter.adminCodeVerified = true;
-    if (search) {
-      const regex = { $regex: search, $options: "i" };
-      filter.$or = [
-        { name: regex },
-        { email: regex },
-        { department: regex },
-        { designation: regex },
-        { roleTitle: regex },
-        { phone: regex },
-        { contactNumber: regex },
-      ];
+
+    let filter = {};
+
+    if (verifiedOnly) {
+      // Handover browsing must be strictly scoped to staff linked to the requesting admin via linkedAdmin
+      // - admin → only staff where linkedAdmin === admin._id
+      // - staff/subadmin → only peers where linkedAdmin === my linkedAdmin (same admin)
+      // No verifiedAdminCode fallback — strict ownership prevents cross-admin leakage (e.g. abc showing under wrong admin)
+      let scopeAdminId = null;
+
+      if (req.user.role === 'admin') {
+        scopeAdminId = req.user._id;
+      } else {
+        const myStaff = await Staff.findOne({ user: req.user._id }).select('linkedAdmin').lean();
+        scopeAdminId = myStaff?.linkedAdmin || null;
+      }
+
+      // Build scoped filter with $and so search and identity can coexist
+      const andClauses = [{ adminCodeVerified: true }];
+
+      if (scopeAdminId) {
+        andClauses.push({ linkedAdmin: scopeAdminId });
+      } else {
+        // No admin association -> return zero results instead of leaking cross-admin data
+        andClauses.push({ _id: { $exists: false } });
+      }
+
+      if (search) {
+        const regex = { $regex: search, $options: "i" };
+        andClauses.push({
+          $or: [
+            { name: regex },
+            { email: regex },
+            { department: regex },
+            { designation: regex },
+            { roleTitle: regex },
+            { phone: regex },
+            { contactNumber: regex },
+          ],
+        });
+      }
+
+      filter = { $and: andClauses };
+    } else {
+      // Non-verified browsing (directory view) — keep existing behavior but still support search
+      if (search) {
+        const regex = { $regex: search, $options: "i" };
+        filter.$or = [
+          { name: regex },
+          { email: regex },
+          { department: regex },
+          { designation: regex },
+          { roleTitle: regex },
+          { phone: regex },
+          { contactNumber: regex },
+        ];
+      }
     }
 
     const [records, total] = await Promise.all([
-      Staff.find(filter).populate("user", "name email role adminCode").sort("-updatedAt").skip(skip).limit(limitNum).lean(),
+      Staff.find(filter).populate("user", "name email role adminCode").populate("linkedAdmin", "name email").sort("-updatedAt").skip(skip).limit(limitNum).lean(),
       Staff.countDocuments(filter),
     ]);
 

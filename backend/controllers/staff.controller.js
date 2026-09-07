@@ -157,20 +157,43 @@ export async function verifyAdminCode(req, res, next) {
 }
 
 /**
- * GET /api/staff/verified — admin: list staff who submitted correct code
+ * GET /api/staff/verified — admin: list staff who submitted correct code (strictly scoped to this admin)
  */
 export async function listVerifiedStaff(req, res, next) {
   try {
     if (req.user.role !== "admin") return res.status(403).json({ success: false, message: "Only admin can view verified staff" });
-    // If admin has a code, show only staff linked to him; otherwise show all verified
-    const filter = { adminCodeVerified: true };
-    // Filter by linkedAdmin if admin has a code set — otherwise show all verified
-    if (req.user.adminCode) {
-      // prefer linkedAdmin match, but also include if verified code equals admin's code (fallback for older records)
-      filter.$or = [{ linkedAdmin: req.user._id }, { verifiedAdminCode: req.user.adminCode }];
-    }
-    const list = await Staff.find(filter).populate("user", "name email role adminCode").populate("linkedAdmin", "name email").sort("-updatedAt").lean();
-    res.json({ success: true, data: list });
+    const filter = { adminCodeVerified: true, linkedAdmin: { $exists: true, $eq: req.user._id } };
+    console.log('[listVerifiedStaff] filter:', JSON.stringify(filter));
+    const list = await Staff.find(filter).populate("user", "name email role adminCode").populate("linkedAdmin", "name email").lean();
+    console.log('[listVerifiedStaff] matched staff count:', list.length);
+    // Map to frontend shape, exposing linkedAdmin as ID string
+    const persons = list.map(s => ({
+      _id: s._id,
+      name: s.name,
+      role: s.designation || s.roleTitle || s.department || "Staff",
+      contactNumber: s.phone || s.contactNumber || "",
+      email: s.email,
+      department: s.department,
+      designation: s.designation,
+      roleTitle: s.roleTitle,
+      phone: s.phone,
+      photo: s.photo?.url ? s.photo : null,
+      isStaff: true,
+      isSubAdmin: s.user?.role === "subadmin",
+      userRole: s.user?.role,
+      staffId: s._id,
+      userId: s.user?._id || s.user,
+      user: s.user,
+      profileCompleted: s.profileCompleted,
+      adminCodeVerified: !!s.adminCodeVerified,
+      verifiedAdminCode: s.verifiedAdminCode || null,
+      linkedAdmin: s.linkedAdmin ? s.linkedAdmin._id?.toString() : (typeof s.linkedAdmin === 'string' ? s.linkedAdmin : null),
+      usageCount: 1,
+      lastUsedAt: s.updatedAt || s.createdAt,
+      createdAt: s.createdAt,
+      updatedAt: s.updatedAt,
+    }));
+    res.json({ success: true, data: persons });
   } catch (err) { next(err); }
 }
 
