@@ -5,6 +5,18 @@
       "destination": "https://lockandkey-a5iy.onrender.com/api/:path*"
     },
     {
+      "source": "/manifest.webmanifest",
+      "destination": "/manifest.webmanifest"
+    },
+    {
+      "source": "/sw.js",
+      "destination": "/sw.js"
+    },
+    {
+      "source": "/workbox-:path*",
+      "destination": "/workbox-:path*"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
