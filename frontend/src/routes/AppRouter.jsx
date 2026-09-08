@@ -15,15 +15,15 @@ import AdminStaffDashboard from '../pages/AdminStaffDashboard';
 import StaffDashboard from '../pages/StaffDashboard';
 import { motion, AnimatePresence } from 'framer-motion';
 
-// Page Transition wrapper component
+// Page Transition wrapper component — instant on first PWA load to avoid black flash
 const PageWrapper = ({ children }) => {
   return (
     <motion.div
-      initial={{ opacity: 0, x: 20 }}
-      animate={{ opacity: 1, x: 0 }}
-      exit={{ opacity: 0, x: -20 }}
-      transition={{ duration: 0.3, ease: 'easeInOut' }}
-      className="w-full flex-1"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.15, ease: 'easeOut' }}
+      className="w-full flex-1 bg-white"
     >
       {children}
     </motion.div>
@@ -35,7 +35,7 @@ const AnimatedRoutes = () => {
   const location = useLocation();
 
   return (
-    <AnimatePresence mode="wait">
+    <AnimatePresence mode="wait" initial={false}>
       <Routes location={location} key={location.pathname}>
         <Route
           path="/"

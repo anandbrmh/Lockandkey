@@ -4,7 +4,51 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#ffffff" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Lock & Key" />
+    <meta name="background-color" content="#ffffff" />
     <title>Lock & Key</title>
+    <!-- Critical inline style: prevent black/PWA flash before CSS loads -->
+    <style>
+      html, body {
+        background: #ffffff !important;
+        margin: 0;
+      }
+      html { -webkit-tap-highlight-color: transparent; }
+      body {
+        background-color: #ffffff;
+        color: #18181b;
+      }
+      #root {
+        min-height: 100vh;
+        min-height: 100dvh;
+        background: #ffffff;
+      }
+      /* Hide framer-motion initial flash - ensure first paint is visible */
+      #root > div { background: #ffffff; }
+    </style>
+    <!-- Synchronous theme init: runs BEFORE React to avoid FOUC / dark flash -->
+    <script>
+      (function() {
+        try {
+          var stored = localStorage.getItem('color-theme');
+          // Force light theme by default - prevents black flash on PWA launch
+          // Only enable dark if user explicitly chose it (not prefers-color-scheme)
+          if (stored === 'dark') {
+            document.documentElement.classList.add('dark');
+          } else {
+            document.documentElement.classList.remove('dark');
+            // Ensure html/body stay white even if system is in dark mode
+            document.documentElement.style.backgroundColor = '#ffffff';
+          }
+          // Ensure theme-color matches actual background
+          var metaTheme = document.querySelector('meta[name="theme-color"]');
+          if (metaTheme) metaTheme.content = '#ffffff';
+        } catch (e) {}
+      })();
+    </script>
     <!-- Wireframe Fonts: Architects Daughter (hand), Space Mono & JetBrains Mono (mono) -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
