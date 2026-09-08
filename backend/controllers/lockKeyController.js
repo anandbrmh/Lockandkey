@@ -213,32 +213,21 @@ export const createRecord = async (req, res, next) => {
     if (isNaN(finalKeyCount) || finalKeyCount < 1) finalKeyCount = 1;
     // No sum validation: keysGiven per person is independent (e.g. 1 person can take 5 keys)
 
-    // Admin browse-only + verified-only enforcement: admin must select verified staff (photo + name from verified staff record)
-    if (req.user.role === "admin" && finalHandoverPersons.length > 0) {
-      // Block direct person photo uploads for admin (browse only)
-      for (let i = 0; i < 10; i++) {
-        if (req.files?.[`personPhoto_${i}`]?.[0]) {
-          return res.status(400).json({ success: false, message: `Admin cannot upload handover person photo for person ${i + 1} — browse existing verified staff only.` });
-        }
-      }
+    // Handover photo: Camera + Browse file + Browse verified staff — allowed for both admin and verified staff
+    // If personId provided via Browse, validate verified status (admin only allows verified)
+    if (finalHandoverPersons.length > 0) {
       for (let i = 0; i < finalHandoverPersons.length; i++) {
         const p = finalHandoverPersons[i];
-        if (p.name && !p.personId) {
-          return res.status(400).json({ success: false, message: `Admin must browse verified staff for handover person ${i + 1} — upload/camera disabled. Select verified staff with image + name via Browse staff.` });
-        }
-        if (p.name && !p.photo?.url) {
-          return res.status(400).json({ success: false, message: `Staff photo required for handover person ${i + 1}. Staff must have image from staff onboarding.` });
-        }
-        // Verified-only check: admin can only handover to staff with adminCodeVerified === true
         if (p.personId) {
           const staffDoc = await Staff.findById(p.personId).select("adminCodeVerified name").lean();
           if (!staffDoc) {
             return res.status(400).json({ success: false, message: `Verified staff not found for handover person ${i + 1}.` });
           }
-          if (!staffDoc.adminCodeVerified) {
+          if (req.user.role === "admin" && !staffDoc.adminCodeVerified) {
             return res.status(400).json({ success: false, message: `Admin can only handover to verified staff. ${staffDoc.name || `Person ${i + 1}`} is not verified (must submit admin code).` });
           }
         }
+        // Manual entry (camera/gallery file) — no personId required, allowed for both admin and verified staff
       }
     }
 
@@ -422,32 +411,22 @@ export const updateRecord = async (req, res, next) => {
       }
       record.handoverPersons = updatedList;
 
-      // Admin browse-only + verified-only enforcement on update
-      if (req.user.role === "admin" && record.handoverPersons.length > 0) {
+      // Handover validation on update: Camera+Gallery+Browse allowed for admin & verified staff — only validate personId if provided
+      if (record.handoverPersons.length > 0) {
         for (let i = 0; i < record.handoverPersons.length; i++) {
           const p = record.handoverPersons[i];
-          if (p.name && !p.personId) {
-            return res.status(400).json({ success: false, message: `Admin must browse verified staff for handover person ${i + 1} — upload/camera disabled.` });
-          }
           if (p.personId) {
             const staffDoc = await Staff.findById(p.personId).select("adminCodeVerified name").lean();
             if (!staffDoc) {
               return res.status(400).json({ success: false, message: `Verified staff not found for handover person ${i + 1}.` });
             }
-            if (!staffDoc.adminCodeVerified) {
+            if (req.user.role === "admin" && !staffDoc.adminCodeVerified) {
               return res.status(400).json({ success: false, message: `Admin can only handover to verified staff. ${staffDoc.name || `Person ${i + 1}`} is not verified.` });
             }
           }
         }
       }
-      // Block admin per-person photo uploads (browse only)
-      if (req.user.role === "admin") {
-        for (let i = 0; i < 10; i++) {
-          if (req.files?.[`personPhoto_${i}`]?.[0]) {
-            return res.status(400).json({ success: false, message: `Admin cannot upload handover person photo for person ${i + 1} — browse existing verified staff only.` });
-          }
-        }
-      }
+      // Camera/Gallery uploads now allowed for admin as well (no browse-only block)
     }
 
     // Handle optional image replacements if new files uploaded — returns true if replaced (for auto-date)

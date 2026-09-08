@@ -47,26 +47,26 @@ export default function PhotoUploadStep({ title, description, photoKey, extraFie
 
   return (
     <div className="space-y-4">
-      <div className="border border-zinc-200 rounded-lg bg-white p-4">
+      <div className="border border-zinc-200 rounded-lg bg-white p-3 sm:p-4">
         <h2 className="text-sm font-semibold">{title}</h2>
-        <p className="mt-1 text-xs font-mono text-zinc-500">{description}</p>
+        <p className="mt-1 text-xs font-mono text-zinc-500 leading-snug">{description}</p>
       </div>
 
       {errorMsg && <div className="flex items-center gap-2 border border-red-200 bg-red-50 text-red-700 px-3 py-2 rounded-md text-xs"><AlertCircle className="h-4 w-4 shrink-0" /> {errorMsg}</div>}
 
       {!photoData ? (
         <div onDragEnter={handleDrag} onDragOver={handleDrag} onDragLeave={handleDrag} onDrop={handleDrop}
-          className={`flex flex-col items-center justify-center p-8 text-center border rounded-lg min-h-[240px] ${isDragActive ? 'bg-zinc-50 border-zinc-900 border-dashed' : 'bg-white border-dashed border-zinc-300'}`}>
+          className={`flex flex-col items-center justify-center p-4 sm:p-8 text-center border rounded-lg min-h-[200px] sm:min-h-[240px] ${isDragActive ? 'bg-zinc-50 border-zinc-900 border-dashed' : 'bg-white border-dashed border-zinc-300'}`}>
           <span className="h-10 w-10 border border-zinc-200 rounded-md bg-zinc-50 flex items-center justify-center"><Upload className="h-5 w-5 text-zinc-500" /></span>
           <p className="mt-3 text-xs font-mono font-medium">Drag & drop image</p>
           <p className="text-[11px] font-mono text-zinc-500">JPEG, PNG, WEBP — max 10MB</p>
 
-          {/* Camera + Browse Files — Native Camera & Gallery removed per request, Browse kept */}
+          {/* Camera + Browse Files — responsive */}
           <div className="mt-4 flex gap-2 w-full max-w-xs">
-            <button type="button" onClick={() => setShowCamera(true)} className="flex-1 wire-btn wire-btn-primary text-xs">
+            <button type="button" onClick={() => setShowCamera(true)} className="flex-1 min-h-[42px] wire-btn wire-btn-primary text-xs touch-manipulation">
               <Camera className="h-3.5 w-3.5" /> Camera
             </button>
-            <button type="button" onClick={() => fileInputRef.current?.click()} className="flex-1 wire-btn text-xs">
+            <button type="button" onClick={() => fileInputRef.current?.click()} className="flex-1 min-h-[42px] wire-btn text-xs touch-manipulation">
               <Upload className="h-3.5 w-3.5" /> Browse File
             </button>
           </div>
@@ -77,7 +77,7 @@ export default function PhotoUploadStep({ title, description, photoKey, extraFie
             </p>
           )}
 
-          {browseAction && <button type="button" onClick={browseAction.onClick} className="mt-2 w-full max-w-xs wire-btn text-xs border-dashed">{browseAction.label}</button>}
+          {browseAction && <button type="button" onClick={browseAction.onClick} className="mt-2 w-full max-w-xs min-h-[42px] wire-btn text-xs border-dashed touch-manipulation">{browseAction.icon}<span className="truncate">{browseAction.label}</span></button>}
 
           {/* Hidden input for Browse File */}
           <input

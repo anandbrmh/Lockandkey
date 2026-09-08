@@ -121,18 +121,18 @@ const handleSubmit = async () => {
       case 2: {
         const locationInlineFields = locations?.length ? (
           <div className="pt-3 border-t border-dashed border-zinc-200 space-y-2">
-            <div className="flex justify-between items-center">
+            <div className="flex justify-between items-center gap-2 flex-wrap">
               <span className="text-xs font-mono flex items-center gap-1"><MapPin className="h-3 w-3" /> Saved locations ({locations.length})</span>
-              {wizardState.savedLocationId && <button type="button" onClick={() => dispatch(clearSavedLocation())} className="text-xs underline">Clear</button>}
+              {wizardState.savedLocationId && <button type="button" onClick={() => dispatch(clearSavedLocation())} className="text-xs underline touch-manipulation">Clear</button>}
             </div>
-            <div className="grid sm:grid-cols-2 gap-2 max-h-48 overflow-auto pr-1">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-auto pr-1">
               {locations.map((loc) => {
                 const sel = wizardState.savedLocationId === loc._id;
                 return (
-                  <div key={loc._id} onClick={() => dispatch(selectSavedLocation(loc))} className={`p-2 rounded-md border cursor-pointer flex items-center gap-2 ${sel ? 'border-zinc-900 bg-zinc-900 text-white' : 'border-zinc-200 bg-white hover:border-zinc-900'}`}>
+                  <div key={loc._id} onClick={() => dispatch(selectSavedLocation(loc))} className={`p-2 rounded-md border cursor-pointer flex items-center gap-2 min-w-0 touch-manipulation ${sel ? 'border-zinc-900 bg-zinc-900 text-white' : 'border-zinc-200 bg-white hover:border-zinc-900'}`}>
                     <span className="h-8 w-8 rounded bg-zinc-100 flex items-center justify-center text-zinc-500 shrink-0"><MapPin className="h-4 w-4" /></span>
-                    <span className="text-xs truncate">{loc.label || 'Location'}</span>
-                    {sel && <Check className="h-3 w-3 ml-auto" />}
+                    <span className="text-xs truncate min-w-0 flex-1">{loc.label || 'Location'}</span>
+                    {sel && <Check className="h-3 w-3 ml-auto shrink-0" />}
                   </div>
                 );
               })}
@@ -149,64 +149,58 @@ const handleSubmit = async () => {
           <div key="handover" className="space-y-4">
             <div>
               <h2 className="text-sm font-semibold">Handover — {handoverPersons.length} {handoverPersons.length === 1 ? 'person form' : 'person forms'} ({keyCountNum} keys total)</h2>
-              <p className="text-xs font-mono text-zinc-500">{isAdmin ? 'Admin: browse verified staff only — only staff who submitted your admin code appear (photo + name from verified record, no upload/camera).' : 'Allocating multiple keys to a person automatically reduces the number of forms needed to distribute all available keys.'}</p>
-              <div className="mt-2 flex gap-2 text-xs font-mono">
+              <p className="text-xs font-mono text-zinc-500 leading-snug">Camera / Gallery manual capture + Browse verified staff — available for both Admin and verified staff. Allocating multiple keys automatically reduces forms.</p>
+              <div className="mt-3 flex flex-wrap gap-1.5 sm:gap-2 text-[11px] sm:text-xs font-mono">
                 <span className="border rounded px-2 py-1 bg-zinc-900 text-white border-zinc-900">Total keys: {keyCountNum}</span>
                 <span className="border rounded px-2 py-1 bg-zinc-50 border-zinc-200">Forms: {handoverPersons.length}</span>
                 <span className="border rounded px-2 py-1 bg-zinc-50 border-zinc-200">Allocated: {totalAllocated} / {keyCountNum}</span>
-                <button type="button" onClick={() => dispatch(addPerson())} className="border rounded px-2 py-1 bg-white hover:bg-zinc-900 hover:text-white border-zinc-900 flex items-center gap-1"><Plus className="h-3 w-3" /> Add person</button>
+                <button type="button" onClick={() => dispatch(addPerson())} className="border rounded px-2 py-1 bg-white hover:bg-zinc-900 hover:text-white border-zinc-900 flex items-center gap-1 shrink-0 touch-manipulation"><Plus className="h-3 w-3" /> Add person</button>
               </div>
             </div>
             {handoverPersons.map((person, idx) => {
               return (
-              <div key={idx} className="wire-card p-3 space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-mono flex items-center gap-1"><span className="h-6 w-6 rounded border border-zinc-900 flex items-center justify-center text-xs">{idx + 1}</span> Person {idx + 1} · <span className="border rounded px-1 text-[11px]">{person.status}</span> · <span className="border rounded px-1 text-[11px] bg-zinc-900 text-white">{person.keysGiven || 1} key{(person.keysGiven||1)>1?'s':''}</span></span>
-                    <div className="flex items-center gap-2">
-                    {handoverPersons.length > 1 && <button type="button" onClick={() => dispatch(removePerson(idx))} className="text-xs border border-red-200 bg-red-50 text-red-700 px-2 py-1 rounded">Remove</button>}
-                    {person.personId ? <button type="button" onClick={() => dispatch(clearSavedPerson({ index: idx }))} className="text-xs underline">Clear</button> : <button type="button" onClick={() => { setActivePersonIdx(idx); setShowPersonBrowse(true); }} className="text-xs underline">{isAdmin ? 'Browse verified staff' : 'Browse staff'}</button>}
+              <div key={idx} className="wire-card p-3 sm:p-4 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <span className="text-xs font-mono flex flex-wrap items-center gap-1"><span className="h-6 w-6 rounded border border-zinc-900 flex items-center justify-center text-xs shrink-0">{idx + 1}</span> Person {idx + 1} · <span className="border rounded px-1 text-[11px]">{person.status}</span> · <span className="border rounded px-1 text-[11px] bg-zinc-900 text-white">{person.keysGiven || 1} key{(person.keysGiven||1)>1?'s':''}</span></span>
+                    <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                    {handoverPersons.length > 1 && <button type="button" onClick={() => dispatch(removePerson(idx))} className="text-xs border border-red-200 bg-red-50 text-red-700 px-2 py-1 rounded touch-manipulation">Remove</button>}
+                    {person.personId ? <button type="button" onClick={() => dispatch(clearSavedPerson({ index: idx }))} className="text-xs underline touch-manipulation">Clear</button> : <button type="button" onClick={() => { setActivePersonIdx(idx); setShowPersonBrowse(true); }} className="text-xs underline touch-manipulation">{isAdmin ? 'Browse verified staff' : 'Browse staff'}</button>}
                   </div>
                 </div>
                 <div className="space-y-1">
-                  <label className="wire-label flex items-center gap-1"><Camera className="h-3 w-3" /> Photo {isAdmin && <span className="text-[10px] font-mono text-amber-700">(verified staff only)</span>}</label>
+                  <label className="wire-label flex items-center gap-1 flex-wrap"><Camera className="h-3 w-3" /> Photo <span className="text-[10px] font-mono text-zinc-500">(Camera / Gallery / Browse)</span></label>
                   {!person.photo ? (
-                    isAdmin ? (
-                      <div className="border border-dashed border-zinc-300 rounded-md p-3 bg-zinc-50 text-center">
-                        <p className="text-xs font-mono text-zinc-500 mb-2">Admin must browse verified staff — upload/camera disabled</p>
-                        <button type="button" onClick={() => { setActivePersonIdx(idx); setShowPersonBrowse(true); }} className="wire-btn wire-btn-primary text-xs mx-auto"><Users className="h-3.5 w-3.5" /> Browse verified staff</button>
+                    <div className="space-y-2">
+                      <div className="flex gap-2">
+                        <button type="button" onClick={() => setCameraPersonIdx(idx)} className="flex-1 min-h-[42px] wire-btn wire-btn-primary text-xs touch-manipulation"><Camera className="h-3.5 w-3.5" /> Camera</button>
+                        <button type="button" onClick={() => personFileRefs.current[idx]?.click()} className="flex-1 min-h-[42px] wire-btn text-xs touch-manipulation"><Upload className="h-3.5 w-3.5" /> Browse file</button>
                       </div>
-                    ) : (
-                      <div className="space-y-2">
-                        <div className="flex gap-2">
-                          <button type="button" onClick={() => setCameraPersonIdx(idx)} className="flex-1 wire-btn wire-btn-primary text-xs"><Camera className="h-3.5 w-3.5" /> Camera</button>
-                          <button type="button" onClick={() => personFileRefs.current[idx]?.click()} className="flex-1 wire-btn text-xs"><Upload className="h-3.5 w-3.5" /> Gallery</button>
-                        </div>
-                        <button type="button" onClick={() => personCameraRefs.current[idx]?.click()} className="w-full wire-btn text-[11px] border-dashed py-1.5"><Camera className="h-3 w-3" /> Native Camera (fallback)</button>
-                        <input ref={el => personFileRefs.current[idx] = el} type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handlePersonFile(idx, f); e.target.value = ''; }} />
-                        <input ref={el => personCameraRefs.current[idx] = el} type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handlePersonFile(idx, f); e.target.value = ''; }} />
-                      </div>
-                    )
+                      <button type="button" onClick={() => personCameraRefs.current[idx]?.click()} className="w-full min-h-[36px] wire-btn text-[11px] border-dashed py-1.5 touch-manipulation"><Camera className="h-3 w-3" /> Native Camera (fallback)</button>
+                      <button type="button" onClick={() => { setActivePersonIdx(idx); setShowPersonBrowse(true); }} className="w-full min-h-[42px] wire-btn text-xs border-dashed touch-manipulation"><Users className="h-3.5 w-3.5" /> {isAdmin ? 'Browse verified staff' : 'Browse staff'}</button>
+                      <p className="text-[11px] font-mono text-zinc-500 text-center leading-snug">Admin &amp; verified staff: all 3 options available</p>
+                      <input ref={el => personFileRefs.current[idx] = el} type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handlePersonFile(idx, f); e.target.value = ''; }} />
+                      <input ref={el => personCameraRefs.current[idx] = el} type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handlePersonFile(idx, f); e.target.value = ''; }} />
+                    </div>
                   ) : (
-                    <div className="relative border border-zinc-200 rounded-md overflow-hidden max-w-sm">
+                    <div className="relative border border-zinc-200 rounded-md overflow-hidden w-full max-w-sm mx-auto sm:mx-0">
                       <img src={person.photo} alt="" className="w-full aspect-video object-cover" />
-                      {!isAdmin && (
-                        <button type="button" onClick={() => dispatch(removePersonPhoto({ index: idx }))} className="absolute top-2 right-2 h-7 w-7 bg-white border border-zinc-200 rounded-md flex items-center justify-center"><Trash2 className="h-3.5 w-3.5" /></button>
+                      <button type="button" onClick={() => dispatch(removePersonPhoto({ index: idx }))} className="absolute top-2 right-2 h-8 w-8 sm:h-7 sm:w-7 bg-white border border-zinc-200 rounded-md flex items-center justify-center shadow-sm touch-manipulation"><Trash2 className="h-3.5 w-3.5" /></button>
+                      {person.personId && (
+                        <div className="absolute bottom-2 left-2 bg-zinc-900 text-white text-[10px] font-mono px-2 py-1 rounded">From staff</div>
                       )}
-                      {isAdmin && (
-                        <div className="absolute bottom-2 left-2 bg-zinc-900 text-white text-[10px] font-mono px-2 py-1 rounded">Staff photo</div>
-                      )}
+                      <div className="absolute bottom-2 right-2 flex gap-1 flex-wrap justify-end max-w-[60%]">
+                        <button type="button" onClick={() => setCameraPersonIdx(idx)} className="h-7 px-2 bg-white border border-zinc-200 rounded-md flex items-center gap-1 text-[11px] shadow-sm touch-manipulation"><Camera className="h-3 w-3" /> Retake</button>
+                        <button type="button" onClick={() => { setActivePersonIdx(idx); setShowPersonBrowse(true); }} className="h-7 px-2 bg-white border border-zinc-200 rounded-md flex items-center gap-1 text-[11px] shadow-sm touch-manipulation"><Users className="h-3 w-3" /> Browse</button>
+                      </div>
                     </div>
                   )}
-                  {isAdmin && !person.photo && (
-                    <input ref={el => personFileRefs.current[idx] = el} type="file" accept="image/*" className="hidden" />
-                  )}
                 </div>
                 <div className="grid sm:grid-cols-2 gap-2">
-                  <div><label className="wire-label flex items-center gap-1"><User className="h-3 w-3" /> Name</label><input value={person.name} onChange={(e) => dispatch(setHandoverDetails({ name: e.target.value, index: idx }))} className="wire-input mt-1" placeholder="Name" readOnly={isAdmin && !!person.personId} disabled={isAdmin && !!person.personId} /></div>
-                  <div><label className="wire-label flex items-center gap-1"><Landmark className="h-3 w-3" /> Role</label><input value={person.role} onChange={(e) => dispatch(setHandoverDetails({ role: e.target.value, index: idx }))} className="wire-input mt-1" placeholder="Role" readOnly={isAdmin && !!person.personId} disabled={isAdmin && !!person.personId} /></div>
+                  <div><label className="wire-label flex items-center gap-1"><User className="h-3 w-3" /> Name</label><input value={person.name} onChange={(e) => dispatch(setHandoverDetails({ name: e.target.value, index: idx }))} className="wire-input mt-1" placeholder="Name" /></div>
+                  <div><label className="wire-label flex items-center gap-1"><Landmark className="h-3 w-3" /> Role</label><input value={person.role} onChange={(e) => dispatch(setHandoverDetails({ role: e.target.value, index: idx }))} className="wire-input mt-1" placeholder="Role" /></div>
                 </div>
                 <div className="grid sm:grid-cols-2 gap-2">
-                  <div><label className="wire-label flex items-center gap-1"><Contact className="h-3 w-3" /> Contact</label><input value={person.contact} onChange={(e) => dispatch(setHandoverDetails({ contact: e.target.value, index: idx }))} className="wire-input mt-1" placeholder="Optional" readOnly={isAdmin && !!person.personId} disabled={isAdmin && !!person.personId} /></div>
+                  <div><label className="wire-label flex items-center gap-1"><Contact className="h-3 w-3" /> Contact</label><input value={person.contact} onChange={(e) => dispatch(setHandoverDetails({ contact: e.target.value, index: idx }))} className="wire-input mt-1" placeholder="Optional" /></div>
                   <div><label className="wire-label flex items-center gap-1"><ShieldCheck className="h-3 w-3" /> Status</label><select value={person.status} onChange={(e) => dispatch(setPersonStatus({ index: idx, status: e.target.value }))} className="wire-input mt-1 bg-white"><option value="active">active</option><option value="inactive">inactive</option><option value="returned">returned</option><option value="lost">lost</option></select></div>
                 </div>
                 <div>
@@ -232,16 +226,16 @@ const handleSubmit = async () => {
 
   const isCurrentStepValid = validateStep(currentStep, wizardState);
   return (
-    <div className="mx-auto max-w-4xl px-4 sm:px-6 py-6 space-y-4">
-      <div className="wire-card p-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
+    <div className="mx-auto max-w-4xl px-3 sm:px-6 py-4 sm:py-6 space-y-3 sm:space-y-4">
+      <div className="wire-card p-3 sm:p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4">
+        <div className="min-w-0">
           <p className="text-[11px] font-mono uppercase tracking-wide text-zinc-500">{isEditing ? 'Editing record' : 'New handover'}</p>
-          <h1 className="text-lg font-semibold">{isEditing ? 'Continue handover' : 'Document handover'}</h1>
+          <h1 className="text-base sm:text-lg font-semibold truncate">{isEditing ? 'Continue handover' : 'Document handover'}</h1>
         </div>
-        <div className="w-full md:w-1/2"><StepIndicator currentStep={currentStep} /></div>
+        <div className="w-full md:w-1/2 shrink-0"><StepIndicator currentStep={currentStep} /></div>
       </div>
-      {createError && <div className="border border-red-200 bg-red-50 text-red-700 px-3 py-2 rounded-md text-xs flex items-center gap-2"><AlertCircle className="h-4 w-4" /> {createError}</div>}
-      <div className="wire-card p-4 sm:p-6 min-h-[380px] flex flex-col">
+      {createError && <div className="border border-red-200 bg-red-50 text-red-700 px-3 py-2 rounded-md text-xs flex items-center gap-2 break-words"><AlertCircle className="h-4 w-4 shrink-0" /> <span className="min-w-0">{createError}</span></div>}
+      <div className="wire-card p-3 sm:p-6 min-h-[320px] sm:min-h-[380px] flex flex-col">
         <div className="flex-1">
           <AnimatePresence mode="wait" custom={direction}>
             <motion.div key={currentStep} custom={direction} variants={variants} initial="enter" animate="center" exit="exit">
@@ -251,12 +245,12 @@ const handleSubmit = async () => {
         </div>
         <BrowsePersonModal open={showPersonBrowse} onClose={() => setShowPersonBrowse(false)} onSelect={(p) => dispatch(selectSavedPerson({ person: p, index: activePersonIdx }))} />
         <BrowseLocationModal open={showLocationBrowse} onClose={() => setShowLocationBrowse(false)} onSelect={(loc) => dispatch(selectSavedLocation(loc))} />
-        <div className="mt-6 pt-4 border-t border-zinc-200 flex flex-wrap justify-between gap-2">
-          <div className="flex gap-2">
-            <button onClick={handlePrev} disabled={currentStep === 0} className="wire-btn text-xs disabled:opacity-40"><ArrowLeft className="h-3.5 w-3.5" /> Back</button>
-            <button onClick={handleSaveDraft} disabled={!canSaveDraft(wizardState)} className="wire-btn text-xs disabled:opacity-40"><Save className="h-3.5 w-3.5" /> {isEditing ? 'Update' : 'Save draft'}</button>
+        <div className="mt-6 pt-4 border-t border-zinc-200 flex flex-col sm:flex-row flex-wrap justify-between gap-2">
+          <div className="flex gap-2 flex-wrap">
+            <button onClick={handlePrev} disabled={currentStep === 0} className="wire-btn text-xs disabled:opacity-40 min-h-[40px] touch-manipulation"><ArrowLeft className="h-3.5 w-3.5" /> Back</button>
+            <button onClick={handleSaveDraft} disabled={!canSaveDraft(wizardState)} className="wire-btn text-xs disabled:opacity-40 min-h-[40px] touch-manipulation"><Save className="h-3.5 w-3.5" /> {isEditing ? 'Update' : 'Save draft'}</button>
           </div>
-          {currentStep < 4 ? <button onClick={handleNext} disabled={!isCurrentStepValid} className="wire-btn wire-btn-primary text-xs disabled:opacity-40">Next <ArrowRight className="h-3.5 w-3.5" /></button> : <span className="text-xs font-mono text-zinc-500">Review → Submit</span>}
+          {currentStep < 4 ? <button onClick={handleNext} disabled={!isCurrentStepValid} className="wire-btn wire-btn-primary text-xs disabled:opacity-40 min-h-[40px] w-full sm:w-auto justify-center touch-manipulation">Next <ArrowRight className="h-3.5 w-3.5" /></button> : <span className="text-xs font-mono text-zinc-500 text-center sm:text-right">Review → Submit</span>}
         </div>
       </div>
     </div>
