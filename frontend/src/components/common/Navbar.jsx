@@ -1,7 +1,18 @@
 import React, { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useSelector, useDispatch } from 'react-redux';
-import { KeyRound, PlusCircle, Home, Menu, X, LogOut, LogIn, UserPlus, Shield, Settings, Users } from 'lucide-react';
+import {
+  KeyRound,
+  PlusCircle,
+  Home,
+  Menu,
+  X,
+  LogOut,
+  LogIn,
+  UserPlus,
+  Lock,
+  Users,
+} from 'lucide-react';
 import { selectIsAuthenticated, selectCurrentUser, logout } from '../../features/auth/authSlice';
 import { resetWizard } from '../../features/wizard/wizardSlice';
 
@@ -24,133 +35,175 @@ export default function Navbar() {
     setIsOpen(false);
   };
 
-  const canSubmitRecord = currentUser?.role === 'admin';
-
-  const navItems = [
-    { to: '/', label: 'Home', icon: Home },
-    ...(isAuthenticated && canSubmitRecord ? [{ to: '/wizard', label: 'New', icon: PlusCircle }] : []),
-    ...(isAuthenticated ? [{ to: '/locks-directory', label: 'Locks', icon: Shield }] : []),
-    ...(isAuthenticated && currentUser?.role === 'admin' ? [{ to: '/assigned-users', label: 'Users', icon: Users }] : []),
-    ...(isAuthenticated && currentUser?.role === 'admin' ? [{ to: '/admin/settings', label: 'Admin Settings', icon: Settings }] : []),
+  // Exactly 4 items for desktop: Home, Locks, Users, Create New
+  const desktopItems = [
+    { to: '/', label: 'Home', icon: Home, color: 'bg-sky-50 text-sky-600 border-sky-100' },
+    { to: '/locks-directory', label: 'Locks', icon: Lock, color: 'bg-violet-50 text-violet-600 border-violet-100' },
+    { to: '/assigned-users', label: 'Users', icon: Users, color: 'bg-blue-50 text-blue-600 border-blue-100' },
+    { to: '/wizard', label: 'Create New', icon: PlusCircle, color: 'bg-emerald-50 text-emerald-600 border-emerald-100', onClick: handleNewClick },
   ];
 
-  const linkCls = ({ isActive }) =>
-    `flex items-center gap-1.5 px-3 py-1.5 text-xs font-mono uppercase tracking-wide rounded-md border ${
-      isActive ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-700 border-zinc-200 hover:border-zinc-900'
-    }`;
+  // Mobile bottom bar: exactly 3 icons — Create, Users, Lock (no Home)
+  const mobileItems = [
+    { to: '/wizard', label: 'Create', icon: PlusCircle, color: 'bg-emerald-50 text-emerald-600 border-emerald-100', onClick: handleNewClick },
+    { to: '/assigned-users', label: 'Users', icon: Users, color: 'bg-blue-50 text-blue-600 border-blue-100' },
+    { to: '/locks-directory', label: 'Locks', icon: Lock, color: 'bg-violet-50 text-violet-600 border-violet-100' },
+  ];
 
-  const sidebarLinkCls = ({ isActive }) =>
-    `flex items-center gap-3 px-3 py-3 rounded-md border text-xs font-mono uppercase tracking-wide transition-colors ${
-      isActive ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-700 border-zinc-200 hover:border-zinc-900'
-    }`;
+  const NavItem = ({ item, size = 'default' }) => {
+    const Icon = item.icon;
+    return (
+      <NavLink
+        to={item.to}
+        onClick={item.onClick}
+        className={({ isActive }) =>
+          `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all border ${
+            isActive
+              ? 'bg-zinc-900 text-white border-zinc-900 shadow-sm'
+              : 'bg-white text-zinc-600 border-transparent hover:bg-zinc-50 hover:text-zinc-900 hover:border-zinc-200'
+          } ${size === 'compact' ? 'py-2' : ''}`
+        }
+      >
+        {({ isActive }) => (
+          <>
+            <span className={`h-8 w-8 rounded-lg border flex items-center justify-center shrink-0 ${isActive ? 'bg-white/15 border-white/20 text-white' : item.color}`}>
+              <Icon className="h-4 w-4" />
+            </span>
+            <span className="truncate">{item.label}</span>
+          </>
+        )}
+      </NavLink>
+    );
+  };
 
   return (
     <>
-      {/* Desktop vertical sidebar — icons only, hover to reveal names */}
-      <aside className="hidden md:flex fixed left-0 top-0 h-screen w-16 hover:w-56 bg-white border-r border-zinc-200 z-40 flex-col group/sidebar overflow-hidden transition-all duration-200 ease-out">
-        {/* logo */}
-        <div className="h-14 flex items-center gap-3 px-3 border-b border-zinc-200 shrink-0 overflow-hidden">
-          <span className="h-8 w-8 border border-zinc-900 rounded-md flex items-center justify-center bg-white shrink-0">
-            <KeyRound className="h-4 w-4" />
-          </span>
-          <span className="font-sans text-sm font-semibold tracking-tight whitespace-nowrap opacity-0 group-hover/sidebar:opacity-100 transition-opacity duration-200">LOCK & KEY</span>
+      {/* Desktop sidebar — exactly 4 icons */}
+      <aside className="hidden md:flex fixed left-0 top-0 h-screen w-[260px] bg-white border-r border-zinc-200 z-40 flex-col">
+        {/* Brand */}
+        <div className="h-[64px] flex items-center gap-3 px-5 border-b border-zinc-100 shrink-0">
+          <div className="h-9 w-9 rounded-xl bg-sky-500 flex items-center justify-center text-white shadow-sm shrink-0">
+            <KeyRound className="h-5 w-5" />
+          </div>
+          <div className="min-w-0">
+            <div className="text-[13px] font-bold tracking-tight leading-none text-zinc-900">LOCK & KEY</div>
+            <div className="text-[11px] font-medium text-zinc-400 leading-none mt-1">Handover System</div>
+          </div>
         </div>
 
-        {/* nav */}
-        <nav className="flex-1 flex flex-col gap-2 p-2 pt-4 overflow-y-auto overflow-x-hidden">
-          {navItems.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              onClick={item.to === '/wizard' ? handleNewClick : undefined}
-              className={sidebarLinkCls}
-              title={item.label}
-            >
-              <item.icon className="h-4 w-4 shrink-0" />
-              <span className="whitespace-nowrap overflow-hidden opacity-0 w-0 group-hover/sidebar:opacity-100 group-hover/sidebar:w-auto transition-all duration-200">{item.label}</span>
-            </NavLink>
-          ))}
-        </nav>
+        {/* Navigation — only 4 items */}
+        <div className="flex-1 px-3 py-6 space-y-1 overflow-y-auto">
+          <div className="text-[11px] font-semibold tracking-widest uppercase text-zinc-400 px-2 mb-3">Navigate</div>
+          <nav className="space-y-1.5">
+            {desktopItems.map((item) => (
+              <NavItem key={item.to} item={item} />
+            ))}
+          </nav>
+      
+        </div>
 
-        {/* auth / user */}
-        <div className="border-t border-zinc-200 p-2 flex flex-col gap-2 shrink-0 overflow-hidden">
+        {/* User */}
+        <div className="border-t border-zinc-100 p-3 shrink-0 bg-zinc-50/50">
           {isAuthenticated ? (
-            <>
-              <div className="flex items-center gap-3 px-2 py-2 overflow-hidden">
-                <span className="h-7 w-7 rounded-full bg-zinc-900 text-white flex items-center justify-center text-xs font-mono shrink-0">
+            <div className="space-y-2.5">
+              <div className="flex items-center gap-2.5 px-2.5 py-2.5 rounded-xl bg-white border border-zinc-200 shadow-sm">
+                <div className="h-9 w-9 rounded-full bg-zinc-900 text-white flex items-center justify-center text-xs font-bold shrink-0">
                   {(currentUser?.name || 'U').charAt(0).toUpperCase()}
-                </span>
-                <div className="flex flex-col overflow-hidden opacity-0 w-0 group-hover/sidebar:opacity-100 group-hover/sidebar:w-auto transition-all duration-200">
-                  <span className="text-xs font-mono font-medium truncate leading-none">{currentUser?.name}</span>
                 </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-semibold leading-none truncate text-zinc-900">{currentUser?.name}</div>
+                  <div className="text-xs text-zinc-500 capitalize truncate mt-0.5">{currentUser?.role || 'Staff'}</div>
+                </div>
+                <span className="h-2 w-2 rounded-full bg-emerald-500 shrink-0" />
               </div>
-              <button onClick={handleLogout} className="flex items-center gap-3 px-3 py-2.5 rounded-md border border-zinc-900 bg-white text-zinc-900 text-xs font-mono uppercase tracking-wide hover:bg-zinc-900 hover:text-white transition-colors w-full" title="Logout">
-                <LogOut className="h-4 w-4 shrink-0" />
-                <span className="whitespace-nowrap overflow-hidden opacity-0 w-0 group-hover/sidebar:opacity-100 group-hover/sidebar:w-auto transition-all duration-200">Logout</span>
+              <button onClick={handleLogout} className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl bg-white border border-zinc-200 text-zinc-700 text-sm font-medium hover:bg-zinc-50 transition-colors">
+                <LogOut className="h-4 w-4" /> Logout
               </button>
-            </>
+            </div>
           ) : (
-            <>
-              <NavLink to="/login" className="flex items-center gap-3 px-3 py-2.5 rounded-md border border-zinc-200 bg-white text-zinc-700 text-xs font-mono uppercase tracking-wide hover:border-zinc-900 transition-colors" title="Login">
-                <LogIn className="h-4 w-4 shrink-0" />
-                <span className="whitespace-nowrap overflow-hidden opacity-0 w-0 group-hover/sidebar:opacity-100 group-hover/sidebar:w-auto transition-all duration-200">Login</span>
+            <div className="grid grid-cols-2 gap-2">
+              <NavLink to="/login" className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl border border-zinc-200 bg-white text-zinc-700 text-sm font-medium hover:bg-zinc-50">
+                <LogIn className="h-4 w-4" /> Login
               </NavLink>
-              <NavLink to="/register" className="flex items-center gap-3 px-3 py-2.5 rounded-md border border-zinc-900 bg-zinc-900 text-white text-xs font-mono uppercase tracking-wide" title="Register">
-                <UserPlus className="h-4 w-4 shrink-0" />
-                <span className="whitespace-nowrap overflow-hidden opacity-0 w-0 group-hover/sidebar:opacity-100 group-hover/sidebar:w-auto transition-all duration-200">Register</span>
+              <NavLink to="/register" className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-zinc-900 text-white text-sm font-medium hover:bg-black">
+                <UserPlus className="h-4 w-4" /> Register
               </NavLink>
-            </>
+            </div>
           )}
-          <div className="hidden group-hover/sidebar:flex text-[10px] font-mono text-zinc-400 px-2 whitespace-nowrap overflow-hidden opacity-0 group-hover/sidebar:opacity-100 transition-opacity">Hover to expand</div>
         </div>
       </aside>
 
       {/* Mobile top bar */}
-      <nav className="md:hidden sticky top-0 z-40 w-full bg-white border-b border-zinc-200">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="flex h-14 items-center justify-between gap-4">
-            <NavLink to="/" className="flex items-center gap-2">
-              <span className="h-8 w-8 border border-zinc-900 rounded-md flex items-center justify-center bg-white">
+      <nav className="md:hidden sticky top-0 z-40 w-full bg-white/95 backdrop-blur border-b border-zinc-200">
+        <div className="px-4">
+          <div className="flex h-[56px] items-center justify-between gap-4">
+            <NavLink to="/" className="flex items-center gap-2.5">
+              <span className="h-8 w-8 rounded-xl bg-sky-500 flex items-center justify-center text-white">
                 <KeyRound className="h-4 w-4" />
               </span>
-              <span className="font-sans text-sm font-semibold tracking-tight">LOCK & KEY</span>
+              <span className="text-sm font-bold tracking-tight">LOCK & KEY</span>
             </NavLink>
-            <button onClick={() => setIsOpen(!isOpen)} className="h-9 w-9 border border-zinc-900 rounded-md flex items-center justify-center bg-white">
+            <button onClick={() => setIsOpen(!isOpen)} className="h-9 w-9 rounded-xl border border-zinc-200 bg-white flex items-center justify-center">
               {isOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
             </button>
           </div>
         </div>
         {isOpen && (
-          <div className="border-t border-zinc-200 bg-white px-4 py-3 space-y-2">
-            <div className="flex gap-2">
-              {navItems.map((item) => (
-                <NavLink key={item.to} to={item.to} onClick={() => { setIsOpen(false); if (item.to === '/wizard') handleNewClick(); }} className={linkCls}>
-                  <item.icon className="h-3.5 w-3.5" />{item.label}
-                </NavLink>
-              ))}
+          <div className="border-t border-zinc-100 bg-white px-4 py-4 space-y-3">
+            <div className="grid grid-cols-1 gap-1.5">
+              {desktopItems.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <NavLink
+                    key={item.to}
+                    to={item.to}
+                    onClick={() => { setIsOpen(false); if (item.onClick) item.onClick(); }}
+                    className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 rounded-xl border text-sm font-medium ${isActive ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white border-zinc-200 text-zinc-700'}`}
+                  >
+                    <Icon className="h-4 w-4" /> {item.label}
+                  </NavLink>
+                );
+              })}
             </div>
             {isAuthenticated ? (
-              <button onClick={handleLogout} className="w-full wire-btn justify-between text-xs">
-                Logout — {currentUser?.name} <LogOut className="h-3.5 w-3.5" />
+              <button onClick={handleLogout} className="w-full flex items-center justify-center gap-2 px-3 py-3 rounded-xl border border-zinc-200 bg-white text-sm font-medium">
+                <LogOut className="h-4 w-4" /> Logout — {currentUser?.name}
               </button>
             ) : (
               <div className="grid grid-cols-2 gap-2">
-                <NavLink to="/login" onClick={() => setIsOpen(false)} className="wire-btn text-xs"><LogIn className="h-3.5 w-3.5" /> Login</NavLink>
-                <NavLink to="/register" onClick={() => setIsOpen(false)} className="wire-btn wire-btn-primary text-xs"><UserPlus className="h-3.5 w-3.5" /> Register</NavLink>
+                <NavLink to="/login" onClick={() => setIsOpen(false)} className="flex items-center justify-center gap-1.5 px-3 py-3 rounded-xl border border-zinc-200 bg-white text-sm font-medium"><LogIn className="h-4 w-4" /> Login</NavLink>
+                <NavLink to="/register" onClick={() => setIsOpen(false)} className="flex items-center justify-center gap-1.5 px-3 py-3 rounded-xl bg-zinc-900 text-white text-sm font-medium"><UserPlus className="h-4 w-4" /> Register</NavLink>
               </div>
             )}
           </div>
         )}
       </nav>
 
-      {/* Mobile bottom */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-zinc-200 px-2 py-2">
-        <div className="flex gap-1">
-          {navItems.map((item) => (
-            <NavLink key={item.to} to={item.to} onClick={item.to === '/wizard' ? handleNewClick : undefined} className={({ isActive }) => `flex-1 flex flex-col items-center gap-1 py-2 rounded-md border text-[11px] font-mono uppercase ${isActive ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white border-zinc-200'}`}>
-              <item.icon className="h-4 w-4" />{item.label}
-            </NavLink>
-          ))}
+      {/* Mobile bottom bar — exactly 3 icons: Create, Users, Lock */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-zinc-200 px-3 py-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] ">
+        <div className="grid grid-cols-3 gap-2">
+          {mobileItems.map((item) => {
+            const Icon = item.icon;
+            return (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                onClick={item.onClick}
+                className={({ isActive }) =>
+                  `flex flex-col items-center gap-1 py-2.5 rounded-2xl border text-xs font-semibold transition-all ${isActive ? 'bg-zinc-900 text-white border-zinc-900 shadow-sm' : 'bg-zinc-50 border-zinc-200 text-zinc-600'}`
+                }
+              >
+                {({ isActive }) => (
+                  <>
+                    <span className={`h-7 w-7 rounded-xl border flex items-center justify-center ${isActive ? 'bg-white/15 border-white/20 text-white' : item.color}`}>
+                      <Icon className="h-4 w-4" />
+                    </span>
+                    <span className="leading-none">{item.label}</span>
+                  </>
+                )}
+              </NavLink>
+            );
+          })}
         </div>
       </div>
     </>

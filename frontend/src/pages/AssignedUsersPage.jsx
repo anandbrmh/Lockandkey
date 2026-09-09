@@ -54,13 +54,13 @@ export default function AssignedUsersPage() {
     <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 py-6 space-y-6">
       <div className="wire-card p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white">
         <div className="flex items-center gap-3">
-          <div className="h-10 w-10 border border-zinc-900 rounded-lg flex items-center justify-center bg-zinc-900 text-white shrink-0"><Users className="h-5 w-5" /></div>
+          <div className="h-10 w-10 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600 shrink-0"><Users className="h-5 w-5" /></div>
           <div>
-            <h1 className="text-lg font-semibold tracking-tight flex items-center gap-2">Users <span className="text-xs font-mono text-zinc-500">({pagination.total})</span></h1>
-            <p className="text-xs font-mono text-zinc-500">Admin's assigned users — name + phone + photo. Click a user to view all associated keys & locks.</p>
+            <h1 className="text-lg font-semibold tracking-tight flex items-center gap-2">Users <span className="text-xs font-medium bg-blue-50 text-blue-700 border border-blue-100 px-2 py-0.5 rounded-full">{pagination.total}</span></h1>
+            <p className="text-xs text-zinc-500">Admin's assigned users — name + phone + photo. Click a user to view all associated keys & locks.</p>
           </div>
         </div>
-        <span className="border border-zinc-200 rounded-md px-3 py-1.5 text-xs font-mono bg-zinc-50">{users.length} users</span>
+        <span className="border border-zinc-200 rounded-full px-3 py-1.5 text-xs font-medium bg-zinc-50 flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-blue-500" /> {users.length} users</span>
       </div>
 
       {/* Create new assigned user with camera/file */}

@@ -20,7 +20,7 @@ const PageWrapper = ({ children }) => {
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.15, ease: 'easeOut' }}
-      className="w-full flex-1 bg-white"
+      className="w-full flex-1 bg-[#f8f9fb]"
     >
       {children}
     </motion.div>
@@ -112,10 +112,10 @@ const AnimatedRoutes = () => {
 export default function AppRouter() {
   return (
     <BrowserRouter>
-      <div className="flex flex-col min-h-screen bg-white text-zinc-900">
+      <div className="flex flex-col min-h-screen bg-[#f8f9fb] text-zinc-900">
         <Navbar />
-        {/* bottom padding on mobile to avoid fixed bottom bar overlap; left padding on desktop for fixed sidebar */}
-        <main className="flex-1 w-full relative pb-20 md:pb-0 md:pl-16">
+        {/* left padding for fixed 260px sidebar, mobile bottom bar */}
+        <main className="flex-1 w-full relative pb-20 md:pb-0 md:pl-[260px]">
           <AnimatedRoutes />
         </main>
       </div>

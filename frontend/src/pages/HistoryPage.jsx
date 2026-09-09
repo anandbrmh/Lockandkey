@@ -153,13 +153,18 @@ export default function HistoryPage() {
       {/* header — admin merged info */}
       <div className="wire-card p-4 flex flex-col gap-3">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div>
-            <h1 className="text-lg font-semibold flex items-center gap-2">History {isAdmin && <span className="text-[11px] font-mono bg-zinc-900 text-white rounded px-2 py-0.5">Merged — Admin + Subadmin</span>}</h1>
-            <p className="text-xs font-mono text-zinc-500">
-              {pagination ? `${pagination.total} records${isAdmin && ownerCounts ? ` · ${ownerCounts.admin} admin / ${ownerCounts.subadmin} subadmin` : ''}` : 'Audit log'}
-            </p>
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-xl bg-amber-50 border border-amber-100 flex items-center justify-center text-amber-600 shrink-0">
+              <FileClock className="h-5 w-5" />
+            </div>
+            <div>
+              <h1 className="text-lg font-semibold flex items-center gap-2">History {isAdmin && <span className="text-[11px] font-medium bg-zinc-900 text-white rounded-full px-2.5 py-0.5">Merged</span>}</h1>
+              <p className="text-xs text-zinc-500">
+                {pagination ? `${pagination.total} records${isAdmin && ownerCounts ? ` · ${ownerCounts.admin} admin / ${ownerCounts.subadmin} subadmin` : ''}` : 'Audit log'}
+              </p>
+            </div>
           </div>
-          <button onClick={() => dispatch(fetchRecords({ page: 1, limit: 50 }))} className="wire-btn text-xs"><RefreshCw className="h-3.5 w-3.5" /> Refresh</button>
+          <button onClick={() => dispatch(fetchRecords({ page: 1, limit: 50 }))} className="px-3 py-2 rounded-lg bg-white border border-zinc-200 text-sm font-medium text-zinc-700 hover:bg-zinc-50 flex items-center gap-1.5"><RefreshCw className="h-4 w-4" /> Refresh</button>
         </div>
         {isAdmin && ownerCounts && (
           <div className="flex items-center gap-2 border-t border-zinc-100 pt-3 flex-wrap">

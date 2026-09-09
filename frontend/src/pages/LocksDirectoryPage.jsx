@@ -81,23 +81,23 @@ export default function LocksDirectoryPage() {
       <div className="wire-card p-5 flex flex-col gap-4 bg-white">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 border border-zinc-900 rounded-lg flex items-center justify-center bg-zinc-900 text-white shrink-0">
+            <div className="h-10 w-10 rounded-xl bg-violet-50 border border-violet-100 flex items-center justify-center text-violet-600 shrink-0">
               <KeyRound className="h-5 w-5" />
             </div>
             <div>
               <h1 className="text-lg font-semibold tracking-tight flex items-center gap-2">
                 Locks Directory
               </h1>
-              <p className="text-xs font-mono text-zinc-500">
+              <p className="text-xs text-zinc-500">
                 List of all locks, key counts, and associated handover locations.
               </p>
             </div>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="border border-zinc-200 rounded-md px-3 py-1.5 text-xs font-mono bg-zinc-50">{counts.total} Total Locks</span>
+            <span className="border border-zinc-200 rounded-full px-3 py-1.5 text-xs font-medium bg-zinc-50 flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-violet-500" /> {counts.total} Total Locks</span>
             {canSubmitRecord && (
-              <button onClick={() => navigate('/wizard')} className="wire-btn wire-btn-primary !py-1.5 text-xs flex items-center gap-1" title="Submit new Lock & Key record">
-                <PlusCircle className="h-3.5 w-3.5" /> New Record
+              <button onClick={() => navigate('/wizard')} className="px-4 py-2 rounded-xl bg-zinc-900 text-white text-sm font-medium hover:bg-black flex items-center gap-1.5 shadow-sm" title="Submit new Lock & Key record">
+                <PlusCircle className="h-4 w-4" /> New Record
               </button>
             )}
           </div>
