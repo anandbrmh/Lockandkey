@@ -200,7 +200,9 @@ export const createRecord = async (req, res, next) => {
     if (isNaN(finalKeyCount) || finalKeyCount < 1) finalKeyCount = 1;
     // No sum validation: keysGiven per person is independent (e.g. 1 person can take 5 keys)
 
-    // Auto-store assigner in AssignedUser schema — visible in Users icon on both dashboards
+    // Auto-store assigner in AssignedUser schema — visible in Users dashboard
+    // Fix: do not store phone=null (caused duplicate index & blocked record creation).
+    // Use sparse/partial index and only set phone when non-empty string.
     for (let i = 0; i < finalHandoverPersons.length; i++) {
       const p = finalHandoverPersons[i];
       if (!p.personId && p.name) {
@@ -209,11 +211,14 @@ export const createRecord = async (req, res, next) => {
         if (rawPhone) assigned = await AssignedUser.findOne({ createdBy: req.user._id, phone: rawPhone });
         if (!assigned) assigned = await AssignedUser.findOne({ createdBy: req.user._id, name: p.name.trim() });
         if (!assigned) {
-          const phoneToStore = rawPhone || null;
+          const phoneToStore = rawPhone || undefined;
           try {
-            assigned = await AssignedUser.create({ name: p.name.trim(), phone: phoneToStore, photo: p.photo || undefined, createdBy: req.user._id });
+            const docToCreate = { name: p.name.trim(), photo: p.photo || undefined, createdBy: req.user._id };
+            if (phoneToStore) docToCreate.phone = phoneToStore;
+            assigned = await AssignedUser.create(docToCreate);
           } catch (e) {
-            if (phoneToStore) assigned = await AssignedUser.findOne({ createdBy: req.user._id, phone: phoneToStore });
+            // Duplicate race — re-fetch by phone or name
+            if (rawPhone) assigned = await AssignedUser.findOne({ createdBy: req.user._id, phone: rawPhone });
             if (!assigned) assigned = await AssignedUser.findOne({ createdBy: req.user._id, name: p.name.trim() });
             if (!assigned) throw e;
           }
@@ -223,7 +228,7 @@ export const createRecord = async (req, res, next) => {
         }
         if (assigned) {
           p.personId = assigned._id;
-          if (!p.contactNumber && assigned.phone && !assigned.phone.startsWith("auto-")) p.contactNumber = assigned.phone;
+          if (!p.contactNumber && assigned.phone) p.contactNumber = assigned.phone;
         }
       } else if (p.personId) {
         const existsAssigned = await AssignedUser.findById(p.personId).select("_id").lean();
@@ -395,7 +400,7 @@ export const updateRecord = async (req, res, next) => {
       }
       record.handoverPersons = updatedList;
 
-      // Auto-store assigner on update — same as create, visible on both dashboards
+      // Auto-store assigner on update — same as create
       for (let i = 0; i < record.handoverPersons.length; i++) {
         const p = record.handoverPersons[i];
         if (!p.personId && p.name) {
@@ -404,10 +409,18 @@ export const updateRecord = async (req, res, next) => {
           if (rawPhone) assigned = await AssignedUser.findOne({ createdBy: req.user._id, phone: rawPhone });
           if (!assigned) assigned = await AssignedUser.findOne({ createdBy: req.user._id, name: p.name.trim() });
           if (!assigned) {
-            const phoneToStore = rawPhone || null;
-            try { assigned = await AssignedUser.create({ name: p.name.trim(), phone: phoneToStore, photo: p.photo || undefined, createdBy: req.user._id }); } catch (e) { if (phoneToStore) assigned = await AssignedUser.findOne({ createdBy: req.user._id, phone: phoneToStore }); if (!assigned) assigned = await AssignedUser.findOne({ createdBy: req.user._id, name: p.name.trim() }); if (!assigned) throw e; }
+            const phoneToStore = rawPhone || undefined;
+            try {
+              const docToCreate = { name: p.name.trim(), photo: p.photo || undefined, createdBy: req.user._id };
+              if (phoneToStore) docToCreate.phone = phoneToStore;
+              assigned = await AssignedUser.create(docToCreate);
+            } catch (e) {
+              if (rawPhone) assigned = await AssignedUser.findOne({ createdBy: req.user._id, phone: rawPhone });
+              if (!assigned) assigned = await AssignedUser.findOne({ createdBy: req.user._id, name: p.name.trim() });
+              if (!assigned) throw e;
+            }
           } else if (!assigned.photo?.url && p.photo?.url) { assigned.photo = p.photo; await assigned.save(); }
-          if (assigned) { p.personId = assigned._id; if (!p.contactNumber && assigned.phone && !assigned.phone.startsWith("auto-")) p.contactNumber = assigned.phone; }
+          if (assigned) { p.personId = assigned._id; if (!p.contactNumber && assigned.phone) p.contactNumber = assigned.phone; }
         }
       }
       // Camera/Gallery uploads now allowed for admin as well

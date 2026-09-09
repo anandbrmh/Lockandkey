@@ -44,14 +44,37 @@ export const cleanupDuplicateRecordFields = async () => {
   }
 };
 
+const fixAssignedUserIndexes = async () => {
+  try {
+    const db = mongoose.connection.db;
+    if (!db) return;
+    const coll = db.collection("assignedusers");
+    // Check current indexes
+    const indexes = await coll.indexes().catch(() => []);
+    const old = indexes.find((idx) => idx.name === "createdBy_1_phone_1");
+    if (old && !old.sparse) {
+      console.log("[DB Sanitizer] Dropping old assignedusers index createdBy_1_phone_1 (non-sparse)...");
+      await coll.dropIndex("createdBy_1_phone_1").catch(() => {});
+    }
+    // Ensure new sparse+partial index exists via model sync
+    const AssignedUser = mongoose.models.AssignedUser;
+    if (AssignedUser?.syncIndexes) {
+      await AssignedUser.syncIndexes().catch((e) => console.warn("[DB Sanitizer] syncIndexes warning:", e.message));
+    }
+  } catch (e) {
+    // non-fatal
+  }
+};
+
 const connectDB = async () => {
   try {
     const conn = await mongoose.connect(process.env.MONGO_URI, {
       serverSelectionTimeoutMS: 3000,
     });
     console.log(`MongoDB connected: ${conn.connection.host}`);
-    // Run cleanup in background without blocking
+    // Run cleanups in background without blocking
     cleanupDuplicateRecordFields().catch(() => {});
+    fixAssignedUserIndexes().catch(() => {});
     return conn;
   } catch (error) {
     console.error(`MongoDB connection error: ${error.message}`);
