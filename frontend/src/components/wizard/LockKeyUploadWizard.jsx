@@ -232,6 +232,14 @@ const handleSubmit = async () => {
       </div>
       {createError && <div className="border border-red-200 bg-red-50 text-red-700 px-3 py-2 rounded-md text-xs flex items-center gap-2 break-words"><AlertCircle className="h-4 w-4 shrink-0" /> <span className="min-w-0">{createError}</span></div>}
       <div className="wire-card p-3 sm:p-6 min-h-[320px] sm:min-h-[380px] flex flex-col">
+        {/* Mobile top controls — visible only on mobile */}
+        <div className="flex flex-col gap-2 pb-4 mb-4 border-b border-zinc-200 md:hidden">
+          <div className="grid grid-cols-2 gap-2">
+            <button onClick={handlePrev} disabled={currentStep === 0} className="wire-btn text-xs disabled:opacity-40 min-h-[42px] touch-manipulation justify-center"><ArrowLeft className="h-3.5 w-3.5" /> Back</button>
+            <button onClick={handleSaveDraft} disabled={!canSaveDraft(wizardState)} className="wire-btn text-xs disabled:opacity-40 min-h-[42px] touch-manipulation justify-center"><Save className="h-3.5 w-3.5" /> {isEditing ? 'Update' : 'Save draft'}</button>
+          </div>
+          {currentStep < 4 ? <button onClick={handleNext} disabled={!isCurrentStepValid} className="wire-btn wire-btn-primary text-xs disabled:opacity-40 min-h-[44px] w-full justify-center touch-manipulation">Next <ArrowRight className="h-3.5 w-3.5" /></button> : <span className="text-xs font-mono text-zinc-500 text-center py-2">Review → Submit</span>}
+        </div>
         <div className="flex-1">
           <AnimatePresence mode="wait" custom={direction}>
             <motion.div key={currentStep} custom={direction} variants={variants} initial="enter" animate="center" exit="exit">
@@ -241,12 +249,13 @@ const handleSubmit = async () => {
         </div>
         <BrowsePersonModal open={showPersonBrowse} onClose={() => setShowPersonBrowse(false)} onSelect={(p) => dispatch(selectSavedPerson({ person: p, index: activePersonIdx }))} />
         <BrowseLocationModal open={showLocationBrowse} onClose={() => setShowLocationBrowse(false)} onSelect={(loc) => dispatch(selectSavedLocation(loc))} />
-        <div className="mt-6 pt-4 border-t border-zinc-200 flex flex-col sm:flex-row flex-wrap justify-between gap-2">
+        {/* Desktop bottom controls — hidden on mobile */}
+        <div className="hidden md:flex mt-6 pt-4 border-t border-zinc-200 flex-row flex-wrap justify-between gap-2">
           <div className="flex gap-2 flex-wrap">
             <button onClick={handlePrev} disabled={currentStep === 0} className="wire-btn text-xs disabled:opacity-40 min-h-[40px] touch-manipulation"><ArrowLeft className="h-3.5 w-3.5" /> Back</button>
             <button onClick={handleSaveDraft} disabled={!canSaveDraft(wizardState)} className="wire-btn text-xs disabled:opacity-40 min-h-[40px] touch-manipulation"><Save className="h-3.5 w-3.5" /> {isEditing ? 'Update' : 'Save draft'}</button>
           </div>
-          {currentStep < 4 ? <button onClick={handleNext} disabled={!isCurrentStepValid} className="wire-btn wire-btn-primary text-xs disabled:opacity-40 min-h-[40px] w-full sm:w-auto justify-center touch-manipulation">Next <ArrowRight className="h-3.5 w-3.5" /></button> : <span className="text-xs font-mono text-zinc-500 text-center sm:text-right">Review → Submit</span>}
+          {currentStep < 4 ? <button onClick={handleNext} disabled={!isCurrentStepValid} className="wire-btn wire-btn-primary text-xs disabled:opacity-40 min-h-[40px] w-auto justify-center touch-manipulation">Next <ArrowRight className="h-3.5 w-3.5" /></button> : <span className="text-xs font-mono text-zinc-500 text-right">Review → Submit</span>}
         </div>
       </div>
     </div>

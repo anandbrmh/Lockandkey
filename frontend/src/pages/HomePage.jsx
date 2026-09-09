@@ -29,16 +29,11 @@ export default function HomePage() {
             <div className="min-w-0 flex-1 max-w-full xl:max-w-[560px]">
               <div className="inline-flex flex-wrap items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full bg-white border border-zinc-200 shadow-sm text-[11px] sm:text-xs font-medium text-zinc-600 max-w-full">
                 <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
-                <span className="truncate">Simple & minimal</span>
+          
                 <span className="h-3 w-px bg-zinc-200 hidden sm:block shrink-0" />
                 <span className="text-zinc-400 truncate hidden sm:inline">Lock & Key</span>
               </div>
-              <h1 className="mt-3 sm:mt-4 text-xl xs:text-2xl sm:text-3xl font-semibold tracking-tight leading-tight text-zinc-900 break-words">
-                Handover locks with clarity.
-              </h1>
-              <p className="mt-2 sm:mt-2.5 text-sm sm:text-[15px] leading-relaxed text-zinc-500 max-w-full break-words">
-                Create handovers, track locks and manage users — four actions, zero confusion.
-              </p>
+          
               <div className="mt-4 sm:mt-5 flex flex-col sm:flex-row gap-2 sm:gap-2.5">
                 {isAdmin ? (
                   <button onClick={() => navigate('/wizard')} className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-3 sm:py-2.5 rounded-xl bg-zinc-900 text-white text-sm font-medium hover:bg-black shadow-sm">
@@ -169,9 +164,7 @@ export default function HomePage() {
           </div>
         </div>
 
-        <div className="flex items-center justify-center gap-2 text-[11px] sm:text-xs text-zinc-400 px-2 text-center flex-wrap">
-          <ShieldCheck className="h-3.5 w-3.5 shrink-0" /> Minimal · 4 actions on desktop · 3 actions on mobile · fully responsive
-        </div>
+      
       </div>
     </div>
   );
