@@ -70,23 +70,30 @@ export const getAssignedUserRecords = async (req, res, next) => {
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
     const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 20));
     const skip = (pageNum - 1) * limitNum;
-    const escapedPhone = assignedUser.phone.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const escapedName = assignedUser.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const finalFilter = {
-      isDeleted: false,
-      $or: [
-        { "handoverPersons.personId": assignedUser._id },
-        { "handoverPersons.contactNumber": { $regex: `^${escapedPhone}$`, $options: "i" } },
-        { "handoverPersons.name": { $regex: `^${escapedName}$`, $options: "i" } },
-      ],
-    };
-    const ownerScoped = { isDeleted: false, $or: [{ ownerId: req.user._id }, { createdBy: req.user._id }] };
-    const combined = { $and: [finalFilter, ownerScoped] };
+    const escapedName = (assignedUser.name || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const rawPhone = assignedUser.phone ? String(assignedUser.phone).trim() : "";
+    const handoverOr = [{ "handoverPersons.personId": assignedUser._id }];
+    if (rawPhone && !rawPhone.startsWith("auto-")) {
+      const escPhone = rawPhone.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      handoverOr.push({ "handoverPersons.contactNumber": { $regex: escPhone, $options: "i" } });
+      handoverOr.push({ "handoverPersons.contact": { $regex: escPhone, $options: "i" } });
+    }
+    if (escapedName) handoverOr.push({ "handoverPersons.name": { $regex: escapedName, $options: "i" } });
+    const combined = { isDeleted: false, ownerId: req.user._id, $or: handoverOr };
     const [recordsRaw, total] = await Promise.all([
       LockKeyRecord.find(combined).populate("ownerId", "name email role").sort(sort).skip(skip).limit(limitNum).lean(),
       LockKeyRecord.countDocuments(combined),
     ]);
-    const records = recordsRaw.map(r => ({ ...r, ownerId: r.ownerId || r.createdBy, createdBy: r.ownerId || r.createdBy }));
-    res.json({ success: true, data: { assignedUser, records, pagination: { total, page: pageNum, limit: limitNum, pages: Math.ceil(total / limitNum) } } });
+    let finalRecords = recordsRaw; let finalTotal = total;
+    if (finalTotal === 0) {
+      const fallbackFilter = { isDeleted: false, $or: handoverOr };
+      const [fbRecords, fbTotal] = await Promise.all([
+        LockKeyRecord.find(fallbackFilter).populate("ownerId", "name email role").sort(sort).skip(skip).limit(limitNum).lean(),
+        LockKeyRecord.countDocuments(fallbackFilter),
+      ]);
+      if (fbTotal > 0) { finalRecords = fbRecords; finalTotal = fbTotal; }
+    }
+    const records = finalRecords.map(r => ({ ...r, ownerId: r.ownerId || r.createdBy, createdBy: r.ownerId || r.createdBy }));
+    res.json({ success: true, data: { assignedUser, records, pagination: { total: finalTotal, page: pageNum, limit: limitNum, pages: Math.ceil(finalTotal / limitNum) } } });
   } catch (err) { next(err); }
 };
