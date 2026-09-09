@@ -73,7 +73,7 @@ export const validateRegister = [
   body("name").notEmpty().withMessage("name is required").trim(),
   body("email").trim().isEmail().withMessage("valid email required").normalizeEmail(),
   body("password").isLength({ min: 6 }).withMessage("password must be at least 6 chars"),
-  body("role").optional().isIn(["admin", "staff", "subadmin"]).withMessage("role must be admin, staff or subadmin"),
+  body("role").optional().isIn(["admin"]).withMessage("role must be admin"),
   body("adminCode").optional({ values: "null" }).custom((v) => {
     if (v === "" || v === null || v === undefined) return true;
     if (!/^\d{4}$/.test(String(v))) throw new Error("adminCode must be exactly 4 digits");

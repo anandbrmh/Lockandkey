@@ -8,20 +8,15 @@ export default function RegisterPage() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const { loading, error } = useSelector(selectAuth);
-  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'staff', adminCode: '' });
+  const [form, setForm] = useState({ name: '', email: '', password: '', adminCode: '' });
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    // only send adminCode when role is admin and provided
-    const payload = { ...form };
-    if (payload.role !== 'admin') delete payload.adminCode;
+    const payload = { ...form, role: 'admin' };
     if (payload.adminCode === '') delete payload.adminCode;
     const result = await dispatch(registerUser(payload));
     if (result.meta.requestStatus === 'fulfilled') {
-      const role = result.payload?.user?.role || form.role;
-      if (role === 'admin') navigate('/admin/settings');
-      else if (role === 'staff') navigate('/staff/complete');
-      else navigate('/wizard');
+      navigate('/wizard');
     }
   };
 
@@ -31,7 +26,7 @@ export default function RegisterPage() {
         <div className="flex flex-col items-center text-center">
           <span className="h-10 w-10 border border-zinc-900 rounded-md flex items-center justify-center bg-white"><KeyRound className="h-5 w-5" /></span>
           <h1 className="mt-3 text-xl font-semibold">Create account</h1>
-          <p className="text-xs font-mono text-zinc-500">Staff or admin access</p>
+          <p className="text-xs font-mono text-zinc-500">Admin access only</p>
         </div>
 
         {error && (
@@ -54,19 +49,10 @@ export default function RegisterPage() {
             <input type="password" required minLength={6} value={form.password} onChange={(e)=>setForm({...form,password:e.target.value})} className="wire-input mt-1" placeholder="Min 6 characters" />
           </div>
           <div>
-            <label className="wire-label">Role</label>
-            <select value={form.role} onChange={(e)=>setForm({...form,role:e.target.value})} className="wire-input mt-1 bg-white">
-              <option value="staff">Staff</option>
-              <option value="admin">Admin</option>
-            </select>
+            <label className="wire-label flex items-center gap-1"><Shield className="h-3 w-3" /> 4-digit Admin Code <span className="text-[10px] font-mono text-zinc-500">(optional)</span></label>
+            <input type="text" inputMode="numeric" pattern="\d{4}" maxLength={4} value={form.adminCode} onChange={(e)=>setForm({...form,adminCode:e.target.value.replace(/\D/g,'').slice(0,4)})} className="wire-input mt-1" placeholder="e.g. 1234" />
+            <p className="text-[11px] font-mono text-zinc-500 mt-1">Optional 4-digit code. You can also set it later in Admin Settings.</p>
           </div>
-          {form.role === 'admin' && (
-            <div>
-              <label className="wire-label flex items-center gap-1"><Shield className="h-3 w-3" /> 4-digit Admin Code <span className="text-[10px] font-mono text-zinc-500">(optional, plain — not hashed)</span></label>
-              <input type="text" inputMode="numeric" pattern="\d{4}" maxLength={4} value={form.adminCode} onChange={(e)=>setForm({...form,adminCode:e.target.value.replace(/\D/g,'').slice(0,4)})} className="wire-input mt-1" placeholder="e.g. 1234" />
-              <p className="text-[11px] font-mono text-zinc-500 mt-1">Create a 4-digit code to share with staff. Staff must submit this to appear on your dashboard. Can also set later in Admin Settings.</p>
-            </div>
-          )}
           <button disabled={loading} className="w-full wire-btn wire-btn-primary">
             {loading ? 'Creating...' : 'Register'}
           </button>

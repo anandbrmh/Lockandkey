@@ -8,6 +8,7 @@ import authRoutes from "./routes/authRoutes.js";
 import lockKeyRoutes from "./routes/lockKeyRoutes.js";
 import directoryRoutes from "./routes/directoryRoutes.js";
 import staffRoutes from "./routes/staffRoutes.js";
+import assignedUserRoutes from "./routes/assignedUserRoutes.js";
 import errorHandler from "./middleware/errorHandler.js";
 import webhookRoutes from "./routes/webhookroutes.js";
 import incomingWebhookRoutes from "./routes/incomingWebhook.js";
@@ -128,6 +129,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/lock-key-records", lockKeyRoutes);
 app.use("/api/directory", directoryRoutes);
 app.use("/api/staff", staffRoutes);
+app.use("/api/assigned-users", assignedUserRoutes);
 app.use("/api/webhooks", webhookRoutes);
 app.use("/api/incoming-webhooks", incomingWebhookRoutes);
 

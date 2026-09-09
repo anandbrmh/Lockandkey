@@ -22,12 +22,7 @@ router.use(authMiddleware);
 router.get("/check", checkStaffProfile);
 router.get("/me", getStaffProfile);
 
-// Staff verifies admin code — only verified staff appear on admin dashboard
-router.post("/verify-admin-code", verifyAdminCode);
-
-// Admin-only: verified staff list & promote to subadmin
-router.get("/verified", roleMiddleware("admin"), listVerifiedStaff);
-router.patch("/:id/promote", roleMiddleware("admin"), promoteStaff);
+// Removed: verified-staff logic — admin can assign to anyone without restriction
 
 // Complete / update profile — allow any authenticated user, but intended for staff role
 router.post("/complete", upload.single("image"), fillStaffData);

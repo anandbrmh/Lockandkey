@@ -14,17 +14,16 @@ export const validateStep = (stepIndex, wizardState) => {
     case 2: // Lock Placement Photo — optional for draft, but required for sequential progression
       return !!wizardState.placementPhoto;
 
-    case 3: { // Handover Persons
+    case 3: { // Handover Persons — 2-way assign: name required, phone/contact optional, photo/role optional
       const persons = wizardState.handoverPersons || [];
       if (persons.length === 0) return false;
       if (persons.some(p => (parseInt(p.keysGiven, 10) || 1) < 1)) return false;
       const keyCountNum = parseInt(wizardState.keyCount, 10) || 1;
       const sumAllocated = persons.reduce((s, p) => s + (parseInt(p.keysGiven, 10) || 1), 0);
       if (sumAllocated !== keyCountNum) return false;
-      const hasNames = persons.every(p => p.name?.trim() && p.role?.trim());
+      const hasNames = persons.every(p => p.name?.trim());
       if (!hasNames) return false;
-      const allPhotos = persons.every(p => !!p.photo);
-      return allPhotos;
+      return true;
     }
 
     case 4: { // Review — for incremental saves, only lock is mandatory; full validation is shown as warnings not blocks
@@ -44,7 +43,7 @@ export const isFullyComplete = (wizardState) => {
   const kc = parseInt(wizardState.keyCount) || 0;
   const persons = wizardState.handoverPersons || [];
   const sumAllocated = persons.reduce((s, p) => s + (parseInt(p.keysGiven, 10) || 1), 0);
-  const personsValid = persons.length > 0 && sumAllocated === kc && persons.every(p => p.name?.trim() && p.role?.trim() && !!p.photo && ["active","inactive","returned","lost"].includes(p.status || "active") && (parseInt(p.keysGiven,10)||1) >= 1);
+  const personsValid = persons.length > 0 && sumAllocated === kc && persons.every(p => p.name?.trim() && ["active","inactive","returned","lost"].includes(p.status || "active") && (parseInt(p.keysGiven,10)||1) >= 1);
   return (
     !!wizardState.lockPhoto &&
     !!wizardState.keyPhoto &&

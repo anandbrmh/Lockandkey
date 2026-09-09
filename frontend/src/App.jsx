@@ -22,7 +22,6 @@ function AppInitializer({ children }) {
     return () => window.removeEventListener('auth:unauthorized', handler);
   }, [dispatch]);
 
-  // Keep role in sync (e.g. staff → subadmin promotion requires fresh role without re-login)
   useEffect(() => {
     if (isAuthenticated) {
       dispatch(fetchMe());

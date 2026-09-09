@@ -24,9 +24,9 @@ router.get("/stats/summary", authMiddleware, getStats);
 router.post("/webhook", webhookAuth, createRecordViaWebhook);
 router.post("/webhook/:source", webhookAuth, createRecordViaWebhook);
 
-// List & Create (JWT) — only admin/subadmin can submit
+// List & Create (JWT) — only admin can submit
 router.get("/", authMiddleware, listRecords);
-router.post("/", authMiddleware, roleMiddleware("admin", "subadmin"), uploadFields, validateCreateRecord, createRecord);
+router.post("/", authMiddleware, roleMiddleware("admin"), uploadFields, validateCreateRecord, createRecord);
 
 // Dedicated photo-change endpoints
 router.patch("/:id/person-photo/:personIndex", authMiddleware, uploadPersonPhoto, updatePersonPhoto);
@@ -35,6 +35,6 @@ router.patch("/:id/placement-photo", authMiddleware, uploadPlacementPhoto, updat
 // Single record
 router.get("/:id", authMiddleware, getRecord);
 router.patch("/:id", authMiddleware, uploadFields, validateUpdateRecord, updateRecord);
-router.delete("/:id", authMiddleware, roleMiddleware("admin", "subadmin"), deleteRecord);
+router.delete("/:id", authMiddleware, roleMiddleware("admin"), deleteRecord);
 
 export default router;

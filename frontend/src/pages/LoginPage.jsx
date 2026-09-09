@@ -14,21 +14,7 @@ export default function LoginPage() {
     e.preventDefault();
     const result = await dispatch(loginUser(form));
     if (result.meta.requestStatus === 'fulfilled') {
-      const role = result.payload?.user?.role;
-      // Staff users must complete staff profile before wizard — redirect to onboarding
-      if (role === 'staff') {
-        // Check staff completion via API before deciding
-        try {
-          const api = (await import('../app/api')).default;
-          const { data } = await api.get('/staff/check');
-          if (!data?.completed) navigate('/staff/complete');
-          else navigate('/wizard');
-        } catch {
-          navigate('/staff/complete');
-        }
-      } else {
-        navigate('/wizard');
-      }
+      navigate('/wizard');
     }
   };
 

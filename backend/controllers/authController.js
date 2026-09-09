@@ -15,13 +15,11 @@ export const register = async (req, res, next) => {
     }
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(password, salt);
-    const normalizedRole = role || "staff";
-    // adminCode: optional, only stored plain (not hashed), must be 4 digits if provided
+    const normalizedRole = "admin";
     let normalizedAdminCode = null;
     if (adminCode !== undefined && adminCode !== null && String(adminCode).trim() !== "") {
       const codeStr = String(adminCode).trim();
       if (!/^\d{4}$/.test(codeStr)) return res.status(400).json({ success: false, message: "adminCode must be exactly 4 digits" });
-      if (normalizedRole !== "admin") return res.status(400).json({ success: false, message: "adminCode can only be set for admin role at registration" });
       normalizedAdminCode = codeStr;
     }
     const user = await User.create({ name: name?.trim(), email: normalizedEmail, passwordHash, role: normalizedRole, adminCode: normalizedAdminCode });

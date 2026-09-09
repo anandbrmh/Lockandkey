@@ -5,8 +5,9 @@ import {
   setHandoverDetails, selectSavedPerson, clearSavedPerson,
   selectSavedLocation, clearSavedLocation, setPersonPhoto, removePersonPhoto, setPersonStatus, setPersonKeysGiven, addPerson, removePerson,
 } from '../../features/wizard/wizardSlice';
-import { fetchSavedPersons, fetchSavedLocations, selectDirectory } from '../../features/directory/directorySlice';
+import { fetchSavedLocations, selectDirectory } from '../../features/directory/directorySlice';
 import { createRecord, updateRecord, selectRecordsState } from '../../features/records/recordsSlice';
+import { fetchAssignedUsers } from '../../features/assignedUsers/assignedUsersSlice';
 import { resetWizard } from '../../features/wizard/wizardSlice';
 import { buildRecordFormData } from '../../utils/formDataBuilder';
 import { validateStep, canSaveDraft } from '../../utils/validators';
@@ -28,9 +29,7 @@ export default function LockKeyUploadWizard({ editingId }) {
   const wizardState = useSelector(selectWizard);
   const currentStep = useSelector(selectCurrentStep);
   const { creating: isLoading, loading: updatingLoading, error: createError } = useSelector(selectRecordsState);
-  const { persons = [], locations = [] } = useSelector(selectDirectory);
-  const currentUser = useSelector((s) => s.auth?.user);
-  const isAdmin = currentUser?.role === 'admin';
+  const { locations = [] } = useSelector(selectDirectory);
   const isEditing = !!editingId || !!wizardState.editingRecordId;
   const effectiveId = editingId || wizardState.editingRecordId;
 
@@ -41,9 +40,8 @@ export default function LockKeyUploadWizard({ editingId }) {
   const [activePersonIdx, setActivePersonIdx] = useState(0);
   const [cameraPersonIdx, setCameraPersonIdx] = useState(null);
   const personFileRefs = React.useRef({});
-  const personCameraRefs = React.useRef({});
 
-  useEffect(() => { dispatch(fetchSavedPersons({ limit: 50 })); dispatch(fetchSavedLocations({ limit: 50 })); }, [dispatch]);
+  useEffect(() => { dispatch(fetchSavedLocations({ limit: 50 })); }, [dispatch]);
 
   const handleNext = () => { if (validateStep(currentStep, wizardState)) { setDirection(1); dispatch(nextStep()); } };
   const handlePrev = () => { setDirection(-1); dispatch(prevStep()); };
@@ -58,7 +56,7 @@ const handleSaveDraft = async () => {
 
   const formData = buildRecordFormData(wizardState);
   const result = isEditing && effectiveId ? await dispatch(updateRecord({ id: effectiveId, formData })) : await dispatch(createRecord(formData));
-  if (result.meta.requestStatus === 'fulfilled') setIsSuccess(true); else alert(result.payload || 'Save failed');
+  if (result.meta.requestStatus === 'fulfilled') { dispatch(fetchAssignedUsers({ search: '', limit: 100 })); setIsSuccess(true); } else alert(result.payload || 'Save failed');
 };
 const handleSubmit = async () => {
   if (!canSaveDraft(wizardState)) { alert('Lock Photo required.'); return; }
@@ -77,9 +75,9 @@ const handleSubmit = async () => {
       : await dispatch(createRecord(formData));
 
     if (result.meta.requestStatus === 'fulfilled') {
+      dispatch(fetchAssignedUsers({ search: '', limit: 100 }));
       setIsSuccess(true);
     } else {
-      // API call reject hua (network beech mein gaya) — offline fallback
       await saveOfflineEntry({ wizardState, isEditing, effectiveId, timestamp: Date.now() });
       setIsSuccess(true);
     }
@@ -149,7 +147,7 @@ const handleSubmit = async () => {
           <div key="handover" className="space-y-4">
             <div>
               <h2 className="text-sm font-semibold">Handover — {handoverPersons.length} {handoverPersons.length === 1 ? 'person form' : 'person forms'} ({keyCountNum} keys total)</h2>
-              <p className="text-xs font-mono text-zinc-500 leading-snug">Camera / Gallery manual capture + Browse verified staff — available for both Admin and verified staff. Allocating multiple keys automatically reduces forms.</p>
+              <p className="text-xs font-mono text-zinc-500 leading-snug">Browse assigned users (name + phone) or create new one — then upload. Admin can assign to anyone.</p>
               <div className="mt-3 flex flex-wrap gap-1.5 sm:gap-2 text-[11px] sm:text-xs font-mono">
                 <span className="border rounded px-2 py-1 bg-zinc-900 text-white border-zinc-900">Total keys: {keyCountNum}</span>
                 <span className="border rounded px-2 py-1 bg-zinc-50 border-zinc-200">Forms: {handoverPersons.length}</span>
@@ -164,7 +162,7 @@ const handleSubmit = async () => {
                   <span className="text-xs font-mono flex flex-wrap items-center gap-1"><span className="h-6 w-6 rounded border border-zinc-900 flex items-center justify-center text-xs shrink-0">{idx + 1}</span> Person {idx + 1} · <span className="border rounded px-1 text-[11px]">{person.status}</span> · <span className="border rounded px-1 text-[11px] bg-zinc-900 text-white">{person.keysGiven || 1} key{(person.keysGiven||1)>1?'s':''}</span></span>
                     <div className="flex items-center gap-2 shrink-0 flex-wrap">
                     {handoverPersons.length > 1 && <button type="button" onClick={() => dispatch(removePerson(idx))} className="text-xs border border-red-200 bg-red-50 text-red-700 px-2 py-1 rounded touch-manipulation">Remove</button>}
-                    {person.personId ? <button type="button" onClick={() => dispatch(clearSavedPerson({ index: idx }))} className="text-xs underline touch-manipulation">Clear</button> : <button type="button" onClick={() => { setActivePersonIdx(idx); setShowPersonBrowse(true); }} className="text-xs underline touch-manipulation">{isAdmin ? 'Browse verified staff' : 'Browse staff'}</button>}
+                    {person.personId ? <button type="button" onClick={() => dispatch(clearSavedPerson({ index: idx }))} className="text-xs underline touch-manipulation">Clear</button> : <button type="button" onClick={() => { setActivePersonIdx(idx); setShowPersonBrowse(true); }} className="text-xs underline touch-manipulation">Browse users</button>}
                   </div>
                 </div>
                 <div className="space-y-1">
@@ -175,11 +173,9 @@ const handleSubmit = async () => {
                         <button type="button" onClick={() => setCameraPersonIdx(idx)} className="flex-1 min-h-[42px] wire-btn wire-btn-primary text-xs touch-manipulation"><Camera className="h-3.5 w-3.5" /> Camera</button>
                         <button type="button" onClick={() => personFileRefs.current[idx]?.click()} className="flex-1 min-h-[42px] wire-btn text-xs touch-manipulation"><Upload className="h-3.5 w-3.5" /> Browse file</button>
                       </div>
-                      <button type="button" onClick={() => personCameraRefs.current[idx]?.click()} className="w-full min-h-[36px] wire-btn text-[11px] border-dashed py-1.5 touch-manipulation"><Camera className="h-3 w-3" /> Native Camera (fallback)</button>
-                      <button type="button" onClick={() => { setActivePersonIdx(idx); setShowPersonBrowse(true); }} className="w-full min-h-[42px] wire-btn text-xs border-dashed touch-manipulation"><Users className="h-3.5 w-3.5" /> {isAdmin ? 'Browse verified staff' : 'Browse staff'}</button>
-                      <p className="text-[11px] font-mono text-zinc-500 text-center leading-snug">Admin &amp; verified staff: all 3 options available</p>
+                      <button type="button" onClick={() => { setActivePersonIdx(idx); setShowPersonBrowse(true); }} className="w-full min-h-[42px] wire-btn text-xs border-dashed touch-manipulation"><Users className="h-3.5 w-3.5" /> Browse users</button>
+                      <p className="text-[11px] font-mono text-zinc-500 text-center leading-snug">Browse → check → create if missing → upload</p>
                       <input ref={el => personFileRefs.current[idx] = el} type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handlePersonFile(idx, f); e.target.value = ''; }} />
-                      <input ref={el => personCameraRefs.current[idx] = el} type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handlePersonFile(idx, f); e.target.value = ''; }} />
                     </div>
                   ) : (
                     <div className="relative border border-zinc-200 rounded-md overflow-hidden w-full max-w-sm mx-auto sm:mx-0">

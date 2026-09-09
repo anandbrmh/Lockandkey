@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useSelector, useDispatch } from 'react-redux';
-import { KeyRound, History, PlusCircle, Home, Menu, X, LogOut, LogIn, UserPlus, Users, Shield, Settings ,ShieldUser, LayoutDashboard} from 'lucide-react';
+import { KeyRound, PlusCircle, Home, Menu, X, LogOut, LogIn, UserPlus, Shield, Settings, Users } from 'lucide-react';
 import { selectIsAuthenticated, selectCurrentUser, logout } from '../../features/auth/authSlice';
 import { resetWizard } from '../../features/wizard/wizardSlice';
 
@@ -24,18 +24,14 @@ export default function Navbar() {
     setIsOpen(false);
   };
 
-  const canSubmitRecord = currentUser?.role === 'admin' || currentUser?.role === 'subadmin';
+  const canSubmitRecord = currentUser?.role === 'admin';
 
   const navItems = [
     { to: '/', label: 'Home', icon: Home },
-    ...(canSubmitRecord ? [{ to: '/wizard', label: 'New', icon: PlusCircle }] : []),
-    // { to: '/history', label: 'History', icon: History },
-    { to: '/locks-directory', label: 'Locks', icon: Shield },
-    ...(currentUser?.role === 'staff' ? [{ to: '/staff/dashboard', label: 'My Locks', icon: LayoutDashboard }] : []),
-    ...(currentUser?.role === 'staff' ? [{ to: '/staff/complete', label: 'Profile', icon: UserPlus }] : []),
-    ...(currentUser?.role === 'admin' ? [{ to: '/admin/settings', label: 'Admin Settings', icon: Settings }] : []),
-    ...(currentUser?.role === 'admin' ? [{ to: '/admin/staff', label: ' Staff', icon: ShieldUser }] : []),
-     { to: '/staff-directory', label: 'uSERS', icon: Users },
+    ...(isAuthenticated && canSubmitRecord ? [{ to: '/wizard', label: 'New', icon: PlusCircle }] : []),
+    ...(isAuthenticated ? [{ to: '/locks-directory', label: 'Locks', icon: Shield }] : []),
+    ...(isAuthenticated && currentUser?.role === 'admin' ? [{ to: '/assigned-users', label: 'Users', icon: Users }] : []),
+    ...(isAuthenticated && currentUser?.role === 'admin' ? [{ to: '/admin/settings', label: 'Admin Settings', icon: Settings }] : []),
   ];
 
   const linkCls = ({ isActive }) =>

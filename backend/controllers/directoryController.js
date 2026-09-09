@@ -86,14 +86,36 @@ export const syncDirectoryFromRecords = async (userId = null) => {
 
 export const listSavedPersons = async (req, res, next) => {
   try {
-    const staffList = await Staff.find({ linkedAdmin: req.user._id })
-      .populate("user", "name email role adminCode")
-      .lean();
-    const persons = staffList.map(s => mapStaffToPerson(s));
-    res.status(200).json({ success: true, data: persons });
-  } catch (err) {
-    next(err);
-  }
+    const { search = "", page = 1, limit = 20 } = req.query;
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 20));
+    const skip = (pageNum - 1) * limitNum;
+    let filter = {};
+    if (search) {
+      const regex = { $regex: search, $options: "i" };
+      filter.$or = [
+        { name: regex },
+        { email: regex },
+        { department: regex },
+        { designation: regex },
+        { roleTitle: regex },
+        { phone: regex },
+        { contactNumber: regex },
+      ];
+    }
+    const [records, total] = await Promise.all([
+      Staff.find(filter).populate("user", "name email role adminCode").populate("linkedAdmin", "name email").sort("-updatedAt").skip(skip).limit(limitNum).lean(),
+      Staff.countDocuments(filter),
+    ]);
+    const persons = records.map(mapStaffToPerson);
+    res.json({
+      success: true,
+      data: {
+        persons,
+        pagination: { total, page: pageNum, limit: limitNum, pages: Math.ceil(total / limitNum) },
+      },
+    });
+  } catch (err) { next(err); }
 };
 
 

@@ -1,59 +1,34 @@
 import LockKeyRecord from "../models/LockKeyRecord.js";
 import SavedLocation from "../models/SavedLocation.js";
 import Staff from "../models/staff.js";
+import AssignedUser from "../models/AssignedUser.js";
 import { uploadToImageKit, deleteFilesForRecord, getImageKitAuthParams } from "../services/storageService.js";
 import { upsertSavedLocation } from "./directoryController.js";
 import triggerEvent from "../../services/dispatcher.js";
 import User from "../models/User.js";
 
-const isAdmin = (user) => user?.role === "admin";
 const buildOwnerFilter = (user) => {
-  if (isAdmin(user)) return { isDeleted: false }; // fallback, async path preferred for admin isolation
   return { isDeleted: false, $or: [{ ownerId: user._id }, { createdBy: user._id }] };
 };
 const buildSingleFilter = (id, user) => {
-  const base = { _id: id, isDeleted: false };
-  if (!isAdmin(user)) base.$or = [{ ownerId: user._id }, { createdBy: user._id }];
-  return base;
-};
-const getLinkedSubadminIds = async (adminUser) => {
-  if (!isAdmin(adminUser)) return [];
-  const or = [{ linkedAdmin: adminUser._id }];
-  if (adminUser.adminCode) or.push({ verifiedAdminCode: adminUser.adminCode });
-  const linkedStaff = await Staff.find({ adminCodeVerified: true, $or: or }).select("user").lean();
-  const userIds = linkedStaff.map((s) => s.user).filter(Boolean);
-  if (!userIds.length) return [];
-  const subadminUsers = await User.find({ _id: { $in: userIds }, role: "subadmin" }).select("_id").lean();
-  return subadminUsers.map((u) => u._id);
+  return { _id: id, isDeleted: false, $or: [{ ownerId: user._id }, { createdBy: user._id }] };
 };
 const getAdminMergedFilter = async (user) => {
-  if (!isAdmin(user)) return buildOwnerFilter(user);
-  const linkedSubadminIds = await getLinkedSubadminIds(user);
-  const or = [{ ownerId: user._id }, { createdBy: user._id }];
-  if (linkedSubadminIds.length) or.push({ ownerId: { $in: linkedSubadminIds } }, { createdBy: { $in: linkedSubadminIds } });
-  return { isDeleted: false, $or: or };
+  return buildOwnerFilter(user);
 };
 const getAdminSingleFilter = async (id, user) => {
-  if (!isAdmin(user)) return buildSingleFilter(id, user);
-  const merged = await getAdminMergedFilter(user);
-  return { ...merged, _id: id };
+  return buildSingleFilter(id, user);
 };
 
-// Helper: resolve staff person for handover (returns normalized data)
+// Helper: resolve assigned user or legacy staff for handover
 const resolveStaffForHandover = async (staffId) => {
   try {
+    let doc = await AssignedUser.findById(staffId).lean();
+    if (doc) return { name: doc.name, role: "Assignee", contactNumber: doc.phone || "", photo: null, _id: doc._id };
     const staff = await Staff.findById(staffId).lean();
     if (!staff) return null;
-    const photo = staff.photo?.url
-      ? { url: staff.photo.url, fileId: staff.photo.fileId, uploadedAt: staff.photo.uploadedAt || new Date() }
-      : null;
-    return {
-      name: staff.name,
-      role: staff.designation || staff.roleTitle || staff.department || "Staff",
-      contactNumber: staff.phone || staff.contactNumber || "",
-      photo,
-      _id: staff._id,
-    };
+    const photo = staff.photo?.url ? { url: staff.photo.url, fileId: staff.photo.fileId, uploadedAt: staff.photo.uploadedAt || new Date() } : null;
+    return { name: staff.name, role: staff.designation || staff.roleTitle || staff.department || "Staff", contactNumber: staff.phone || staff.contactNumber || "", photo, _id: staff._id };
   } catch { return null; }
 };
 
@@ -213,21 +188,39 @@ export const createRecord = async (req, res, next) => {
     if (isNaN(finalKeyCount) || finalKeyCount < 1) finalKeyCount = 1;
     // No sum validation: keysGiven per person is independent (e.g. 1 person can take 5 keys)
 
-    // Handover photo: Camera + Browse file + Browse verified staff — allowed for both admin and verified staff
-    // If personId provided via Browse, validate verified status (admin only allows verified)
-    if (finalHandoverPersons.length > 0) {
-      for (let i = 0; i < finalHandoverPersons.length; i++) {
-        const p = finalHandoverPersons[i];
-        if (p.personId) {
-          const staffDoc = await Staff.findById(p.personId).select("adminCodeVerified name").lean();
-          if (!staffDoc) {
-            return res.status(400).json({ success: false, message: `Verified staff not found for handover person ${i + 1}.` });
+    // Auto-store assigner in AssignedUser schema — visible in Users icon on both dashboards
+    for (let i = 0; i < finalHandoverPersons.length; i++) {
+      const p = finalHandoverPersons[i];
+      if (!p.personId && p.name) {
+        const rawPhone = p.contactNumber ? String(p.contactNumber).trim() : "";
+        let assigned = null;
+        if (rawPhone) assigned = await AssignedUser.findOne({ createdBy: req.user._id, phone: rawPhone });
+        if (!assigned) assigned = await AssignedUser.findOne({ createdBy: req.user._id, name: p.name.trim() });
+        if (!assigned) {
+          const phoneToStore = rawPhone || null;
+          try {
+            assigned = await AssignedUser.create({ name: p.name.trim(), phone: phoneToStore, photo: p.photo || undefined, createdBy: req.user._id });
+          } catch (e) {
+            if (phoneToStore) assigned = await AssignedUser.findOne({ createdBy: req.user._id, phone: phoneToStore });
+            if (!assigned) assigned = await AssignedUser.findOne({ createdBy: req.user._id, name: p.name.trim() });
+            if (!assigned) throw e;
           }
-          if (req.user.role === "admin" && !staffDoc.adminCodeVerified) {
-            return res.status(400).json({ success: false, message: `Admin can only handover to verified staff. ${staffDoc.name || `Person ${i + 1}`} is not verified (must submit admin code).` });
+        } else if (!assigned.photo?.url && p.photo?.url) {
+          assigned.photo = p.photo;
+          await assigned.save();
+        }
+        if (assigned) {
+          p.personId = assigned._id;
+          if (!p.contactNumber && assigned.phone && !assigned.phone.startsWith("auto-")) p.contactNumber = assigned.phone;
+        }
+      } else if (p.personId) {
+        const existsAssigned = await AssignedUser.findById(p.personId).select("_id").lean();
+        if (!existsAssigned) {
+          const staffDoc = await Staff.findById(p.personId).select("name").lean();
+          if (!staffDoc && !existsAssigned) {
+            return res.status(400).json({ success: false, message: `Assigned user not found for handover person ${i + 1}.` });
           }
         }
-        // Manual entry (camera/gallery file) — no personId required, allowed for both admin and verified staff
       }
     }
 
@@ -277,43 +270,21 @@ export const createRecord = async (req, res, next) => {
   }
 };
 
-// GET /api/lock-key-records — list with pagination & filters (admin: own+subadmin isolated from peer admins)
+// GET /api/lock-key-records — list with pagination & filters (admin sees own only)
 export const listRecords = async (req, res, next) => {
   try {
-    const { page = 1, limit = 10, status, startDate, endDate, handoverName, sort = "-createdAt", ownerRole, ownerId: ownerIdQuery } = req.query;
+    const { page = 1, limit = 10, status, startDate, endDate, handoverName, sort = "-createdAt" } = req.query;
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
     const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 10));
     const skip = (pageNum - 1) * limitNum;
 
-    let filter = isAdmin(req.user) ? await getAdminMergedFilter(req.user) : buildOwnerFilter(req.user);
+    let filter = buildOwnerFilter(req.user);
     if (status) filter.status = status;
     if (handoverName) filter["handoverPersons.name"] = { $regex: handoverName, $options: "i" };
     if (startDate || endDate) {
       filter.createdAt = {};
       if (startDate) filter.createdAt.$gte = new Date(startDate);
       if (endDate) filter.createdAt.$lte = new Date(endDate);
-    }
-    if (isAdmin(req.user) && ownerRole && ["admin", "subadmin"].includes(ownerRole)) {
-      if (ownerRole === "admin") {
-        filter = { isDeleted: false, $or: [{ ownerId: req.user._id }, { createdBy: req.user._id }] };
-      } else {
-        const linkedSubadminIds = await getLinkedSubadminIds(req.user);
-        if (linkedSubadminIds.length === 0) filter = { isDeleted: false, _id: { $in: [] } };
-        else filter = { isDeleted: false, $or: [{ ownerId: { $in: linkedSubadminIds } }, { createdBy: { $in: linkedSubadminIds } }] };
-      }
-      if (status) filter.status = status;
-      if (handoverName) filter["handoverPersons.name"] = { $regex: handoverName, $options: "i" };
-      if (startDate || endDate) {
-        filter.createdAt = {};
-        if (startDate) filter.createdAt.$gte = new Date(startDate);
-        if (endDate) filter.createdAt.$lte = new Date(endDate);
-      }
-    }
-    if (isAdmin(req.user) && ownerIdQuery) {
-      const linkedSubadminIds = await getLinkedSubadminIds(req.user);
-      const allowed = [String(req.user._id), ...linkedSubadminIds.map(String)];
-      if (!allowed.includes(String(ownerIdQuery))) filter = { isDeleted: false, _id: { $in: [] } };
-      else filter = { isDeleted: false, $or: [{ ownerId: ownerIdQuery }, { createdBy: ownerIdQuery }] };
     }
 
     const [recordsRaw, total] = await Promise.all([
@@ -411,19 +382,19 @@ export const updateRecord = async (req, res, next) => {
       }
       record.handoverPersons = updatedList;
 
-      // Handover validation on update: Camera+Gallery+Browse allowed for admin & verified staff — only validate personId if provided
-      if (record.handoverPersons.length > 0) {
-        for (let i = 0; i < record.handoverPersons.length; i++) {
-          const p = record.handoverPersons[i];
-          if (p.personId) {
-            const staffDoc = await Staff.findById(p.personId).select("adminCodeVerified name").lean();
-            if (!staffDoc) {
-              return res.status(400).json({ success: false, message: `Verified staff not found for handover person ${i + 1}.` });
-            }
-            if (req.user.role === "admin" && !staffDoc.adminCodeVerified) {
-              return res.status(400).json({ success: false, message: `Admin can only handover to verified staff. ${staffDoc.name || `Person ${i + 1}`} is not verified.` });
-            }
-          }
+      // Auto-store assigner on update — same as create, visible on both dashboards
+      for (let i = 0; i < record.handoverPersons.length; i++) {
+        const p = record.handoverPersons[i];
+        if (!p.personId && p.name) {
+          const rawPhone = p.contactNumber ? String(p.contactNumber).trim() : "";
+          let assigned = null;
+          if (rawPhone) assigned = await AssignedUser.findOne({ createdBy: req.user._id, phone: rawPhone });
+          if (!assigned) assigned = await AssignedUser.findOne({ createdBy: req.user._id, name: p.name.trim() });
+          if (!assigned) {
+            const phoneToStore = rawPhone || null;
+            try { assigned = await AssignedUser.create({ name: p.name.trim(), phone: phoneToStore, photo: p.photo || undefined, createdBy: req.user._id }); } catch (e) { if (phoneToStore) assigned = await AssignedUser.findOne({ createdBy: req.user._id, phone: phoneToStore }); if (!assigned) assigned = await AssignedUser.findOne({ createdBy: req.user._id, name: p.name.trim() }); if (!assigned) throw e; }
+          } else if (!assigned.photo?.url && p.photo?.url) { assigned.photo = p.photo; await assigned.save(); }
+          if (assigned) { p.personId = assigned._id; if (!p.contactNumber && assigned.phone && !assigned.phone.startsWith("auto-")) p.contactNumber = assigned.phone; }
         }
       }
       // Camera/Gallery uploads now allowed for admin as well (no browse-only block)
@@ -547,12 +518,10 @@ export const updatePlacementPhoto = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-// DELETE /api/lock-key-records/:id — admin can delete own+subadmin (not peer admin), subadmin own
+// DELETE /api/lock-key-records/:id
 export const deleteRecord = async (req, res, next) => {
   try {
-    let baseFilter;
-    if (isAdmin(req.user)) baseFilter = await getAdminSingleFilter(req.params.id, req.user);
-    else { baseFilter = { _id: req.params.id, isDeleted: false, $or: [{ ownerId: req.user._id }, { createdBy: req.user._id }] }; }
+    const baseFilter = buildSingleFilter(req.params.id, req.user);
     const record = await LockKeyRecord.findOne(baseFilter);
     if (!record) return res.status(404).json({ success: false, message: "Record not found" });
 
@@ -657,14 +626,14 @@ export const getMyAssignedStats = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-// GET /api/lock-key-records/stats/summary — dashboard stats (admin: own+subadmin isolated from peer admins)
+// GET /api/lock-key-records/stats/summary — dashboard stats
 export const getStats = async (req, res, next) => {
   try {
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
     const todayEnd = new Date();
     todayEnd.setHours(23, 59, 59, 999);
-    const ownerFilter = isAdmin(req.user) ? await getAdminMergedFilter(req.user) : buildOwnerFilter(req.user);
+    const ownerFilter = buildOwnerFilter(req.user);
 
     const [totalActive, totalReturned, totalLost, totalAll, keysTodayAgg, topRecipients, recentRecords] = await Promise.all([
       LockKeyRecord.countDocuments({ ...ownerFilter, status: "active" }),
@@ -709,7 +678,7 @@ export const getStats = async (req, res, next) => {
 
 export async function getlockandkeycounts(req, res, next) {
   try {
-    const ownerFilter = isAdmin(req.user) ? await getAdminMergedFilter(req.user) : buildOwnerFilter(req.user);  
+    const ownerFilter = buildOwnerFilter(req.user);  
 
 
     const [totalActive, totalReturned, totalLost, totalAll] = await Promise.all([

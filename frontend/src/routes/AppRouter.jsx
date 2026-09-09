@@ -7,12 +7,9 @@ import WizardPage from '../pages/WizardPage';
 import HistoryPage from '../pages/HistoryPage';
 import LoginPage from '../pages/LoginPage';
 import RegisterPage from '../pages/RegisterPage';
-import StaffOnboardingPage from '../pages/StaffOnboardingPage';
-import StaffDirectoryPage from '../pages/StaffDirectoryPage';
 import LocksDirectoryPage from '../pages/LocksDirectoryPage';
 import AdminSettingsPage from '../pages/AdminSettingsPage';
-import AdminStaffDashboard from '../pages/AdminStaffDashboard';
-import StaffDashboard from '../pages/StaffDashboard';
+import AssignedUsersPage from '../pages/AssignedUsersPage';
 import { motion, AnimatePresence } from 'framer-motion';
 
 // Page Transition wrapper component — instant on first PWA load to avoid black flash
@@ -48,19 +45,9 @@ const AnimatedRoutes = () => {
         <Route path="/login" element={<PageWrapper><LoginPage /></PageWrapper>} />
         <Route path="/register" element={<PageWrapper><RegisterPage /></PageWrapper>} />
         <Route
-          path="/staff/complete"
-          element={
-            <ProtectedRoute allowIncompleteStaff>
-              <PageWrapper>
-                <StaffOnboardingPage />
-              </PageWrapper>
-            </ProtectedRoute>
-          }
-        />
-        <Route
           path="/wizard"
           element={
-            <ProtectedRoute requireStaffComplete requireAdminOrSubadmin>
+            <ProtectedRoute requireAdmin>
               <PageWrapper>
                 <WizardPage />
               </PageWrapper>
@@ -70,7 +57,7 @@ const AnimatedRoutes = () => {
         <Route
           path="/wizard/edit/:id"
           element={
-            <ProtectedRoute requireStaffComplete requireAdminOrSubadmin>
+            <ProtectedRoute requireAdmin>
               <PageWrapper>
                 <WizardPage />
               </PageWrapper>
@@ -88,19 +75,9 @@ const AnimatedRoutes = () => {
           }
         />
         <Route
-          path="/admin/staff"
-          element={
-            <ProtectedRoute requireAdmin>
-              <PageWrapper>
-                <AdminStaffDashboard />
-              </PageWrapper>
-            </ProtectedRoute>
-          }
-        />
-        <Route
           path="/history"
           element={
-            <ProtectedRoute requireStaffComplete>
+            <ProtectedRoute>
               <PageWrapper>
                 <HistoryPage />
               </PageWrapper>
@@ -108,19 +85,9 @@ const AnimatedRoutes = () => {
           }
         />
         <Route
-          path="/staff-directory"
-          element={
-            <ProtectedRoute requireStaffComplete>
-              <PageWrapper>
-                <StaffDirectoryPage />
-              </PageWrapper>
-            </ProtectedRoute>
-          }
-        />
-        <Route
           path="/locks-directory"
           element={
-            <ProtectedRoute requireStaffComplete>
+            <ProtectedRoute requireAdmin>
               <PageWrapper>
                 <LocksDirectoryPage />
               </PageWrapper>
@@ -128,11 +95,11 @@ const AnimatedRoutes = () => {
           }
         />
         <Route
-          path="/staff/dashboard"
+          path="/assigned-users"
           element={
-            <ProtectedRoute requireStaffComplete>
+            <ProtectedRoute requireAdmin>
               <PageWrapper>
-                <StaffDashboard />
+                <AssignedUsersPage />
               </PageWrapper>
             </ProtectedRoute>
           }

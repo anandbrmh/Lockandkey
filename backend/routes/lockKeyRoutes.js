@@ -13,9 +13,9 @@ router.get("/auth/imagekit", authMiddleware, getImageKitAuth);
 // Dashboard stats — must be before /:id
 router.get("/stats/summary", authMiddleware, getStats);
 
-// List & Create — only admin/subadmin can submit new lock&key records
+// List & Create — only admin can submit new lock&key records
 router.get("/", authMiddleware, listRecords);
-router.post("/", authMiddleware, roleMiddleware("admin", "subadmin"), uploadFields, validateCreateRecord, createRecord);
+router.post("/", authMiddleware, roleMiddleware("admin"), uploadFields, validateCreateRecord, createRecord);
 
 // Dedicated photo-change endpoints — system auto-sets handoverAt/placementAt (no client date)
 router.patch("/:id/handover-photo", authMiddleware, uploadHandoverPhoto, updateHandoverPhoto);
@@ -24,6 +24,6 @@ router.patch("/:id/placement-photo", authMiddleware, uploadPlacementPhoto, updat
 // Single record
 router.get("/:id", authMiddleware, getRecord);
 router.patch("/:id", authMiddleware, uploadFields, validateUpdateRecord, updateRecord);
-router.delete("/:id", authMiddleware, roleMiddleware("admin", "subadmin"), deleteRecord);
+router.delete("/:id", authMiddleware, roleMiddleware("admin"), deleteRecord);
 
 export default router;

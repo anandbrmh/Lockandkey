@@ -5,6 +5,7 @@ import authReducer from '../features/auth/authSlice';
 import recordsReducer from '../features/records/recordsSlice';
 import directoryReducer from '../features/directory/directorySlice';
 import staffReducer from '../features/staff/staffSlice';
+import assignedUsersReducer from '../features/assignedUsers/assignedUsersSlice';
 // Keep RTK Query mock for backward compat but primary data now via recordsSlice (axios)
 import { recordsApi } from '../features/records/recordsApi';
 
@@ -16,6 +17,7 @@ export const store = configureStore({
     records: recordsReducer,
     directory: directoryReducer,
     staff: staffReducer,
+    assignedUsers: assignedUsersReducer,
     [recordsApi.reducerPath]: recordsApi.reducer,
   },
   middleware: (getDefaultMiddleware) =>
